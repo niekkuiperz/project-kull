@@ -138,6 +138,22 @@ grant execute on function public.mijn_rol() to authenticated;
 grant execute on function public.met_tweestaps() to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- Wakker houden: een onschuldige functie die de dagelijkse GitHub Action
+-- aanroept, zodat een gratis Supabase-project niet pauzeert. Geeft alleen het
+-- getal 1 terug en raakt geen gegevens.
+-- ---------------------------------------------------------------------------
+create or replace function public.ping()
+returns integer
+language sql
+stable
+set search_path = ''
+as $$
+  select 1;
+$$;
+revoke all on function public.ping() from public;
+grant execute on function public.ping() to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- Gebruikers toevoegen (pas de e-mailadressen aan en voer los uit, NADAT de
 -- accounts zijn aangemaakt onder Authentication > Users > Invite user):
 --

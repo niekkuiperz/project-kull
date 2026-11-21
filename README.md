@@ -39,6 +39,7 @@ Voor gebruik door drie mensen vanaf elke computer (eis F-22) zijn twee dingen no
 ### Kosten en beperkingen
 
 - **Supabase Free** pauzeert een project na een week met weinig activiteit. Bij maandelijks gebruik gebeurt dat dus vrijwel zeker. Gegevens blijven bewaard en je zet het project in het dashboard weer aan, maar dat is lastig voor wie de app alleen af en toe gebruikt. Het **Pro-abonnement** (25 dollar per maand volgens de prijspagina van Supabase) pauzeert niet. Controleer de actuele prijs op <https://supabase.com/pricing>.
+- **Gekozen aanpak:** Supabase Free met een dagelijkse automatische aanroep (zie stap 9), zodat het project niet pauzeert. Supabase noemt dat zelf "meestal genoeg", maar geeft geen garantie. Pauzeert het toch, dan staat het project in het dashboard met één klik weer aan; gegevens blijven bewaard.
 - Supabase Free maakt geen automatische back-ups. Gebruik daarom de knop **Download back-up** onder Instellingen en bewaar dat bestand op een tweede plek (eis N-03). De versiegeschiedenis in de database helpt bij een fout, maar is geen back-up.
 - **GitHub Pages** is op een gratis GitHub-account alleen beschikbaar vanuit een **openbare** repository. Voor een privé-repository is GitHub Pro nodig. De code bevat geen gegevens of geheimen, dus openbaar is technisch veilig; wil je dat niet, kies dan GitHub Pro of een andere host.
 
@@ -52,7 +53,8 @@ Voor gebruik door drie mensen vanaf elke computer (eis F-22) zijn twee dingen no
 6. **App koppelen:** zet in [`js/config.js`](js/config.js) de *Project URL* en de *publishable* (of *anon*) sleutel uit *Project Settings > API*. Gebruik nooit de *secret* of *service_role* sleutel.
 7. **Publiceren:** repository-instellingen > *Pages* > bron: branch `main`, map `/`. Na een minuut staat de app op `https://<gebruikersnaam>.github.io/<repository>/`.
 8. **Inloggen en tweestapsverificatie instellen:** bij de eerste keer inloggen toont de app een QR-code voor een authenticator-app. Zonder die code kom je niet bij de gegevens (eis N-02, afgedwongen in de database).
-9. **Eerste gegevens:** probeer de app eerst met testgegevens (Instellingen), maak hem daarna leeg en voer de echte leners en leningen in.
+9. **Wakker houden instellen:** zet in GitHub onder *Settings > Secrets and variables > Actions* twee secrets: `SUPABASE_URL` (de Project URL) en `SUPABASE_SLEUTEL` (de publishable sleutel). De workflow [`supabase-wakker-houden`](.github/workflows/supabase-wakker-houden.yml) roept dan elke dag de functie `ping` aan, die alleen het getal 1 teruggeeft. Test hem via *Actions > Supabase wakker houden > Run workflow*. GitHub zet geplande workflows uit na 60 dagen zonder activiteit in de repository en stuurt daar vooraf een e-mail over; zet hem dan weer aan.
+10. **Eerste gegevens:** probeer de app eerst met testgegevens (Instellingen), maak hem daarna leeg en voer de echte leners en leningen in.
 
 ### Hoe de beveiliging werkt
 

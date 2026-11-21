@@ -1,0 +1,38 @@
+# Houdt een gratis Supabase-project wakker met één onschuldige aanroep per dag.
+# Nodig: twee repository-secrets (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL      bijvoorbeeld https://abcdefgh.supabase.co
+#   SUPABASE_SLEUTEL  de publishable (of anon) sleutel, NOOIT de secret-sleutel
+# Zolang die ontbreken, slaat de workflow de aanroep netjes over.
+#
+# Let op: GitHub zet geplande workflows uit na 60 dagen zonder activiteit in de
+# repository. Je krijgt daar vooraf een e-mail over; heractiveren kan onder
+# Actions > deze workflow > Enable workflow.
+
+name: Supabase wakker houden
+
+on:
+  schedule:
+    - cron: '23 5 * * *'   # dagelijks om 05:23 UTC
+  workflow_dispatch:        # handmatig starten kan ook
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Database pingen
+        env:
+          URL: ${{ secrets.SUPABASE_URL }}
+          SLEUTEL: ${{ secrets.SUPABASE_SLEUTEL }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$SLEUTEL" ]; then
+            echo "Secrets SUPABASE_URL en SUPABASE_SLEUTEL zijn nog niet ingesteld: overgeslagen."
+            exit 0
+          fi
+          antwoord=$(curl -fsS --max-time 30 -X POST "$URL/rest/v1/rpc/ping" \
+            -H "apikey: $SLEUTEL" -H "Authorization: Bearer $SLEUTEL" \
+            -H "Content-Type: application/json" -d '{}')
+          echo "Antwoord van de database: $antwoord"
+          [ "$antwoord" = "1" ]
