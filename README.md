@@ -70,6 +70,16 @@ De app draait op een gewoon webhostingpakket met PHP en MySQL, zoals Antagonist,
 - Gebruik daarnaast maandelijks de knop **Download back-up** onder Instellingen en bewaar dat bestand op een tweede, losse plek (eis N-03).
 - Bewaar `api/config.php` (of in elk geval de `sleutel`) in je wachtwoordbeheerder. Zonder die sleutel moet iedereen de authenticator-app opnieuw koppelen.
 
+### Noodprocedure: beheerder kan niet meer inloggen
+
+Een andere beheerder kan je tweestapsverificatie herstellen via *Gebruikers*. Ben je de enige beheerder en is je telefoon kwijt, open dan de database in het controlepaneel van de hoster (meestal phpMyAdmin) en voer uit:
+
+```sql
+UPDATE kull_gebruikers SET totp_geheim = NULL, totp_laatste_stap = 0 WHERE email = 'jouw@emailadres.nl';
+```
+
+Bij de volgende keer inloggen koppel je de app opnieuw. Tip: maak twee beheerders aan, dan is dit nooit nodig.
+
 ## Openbare repository: wat er nooit in mag
 
 Deze repository kan openbaar zijn. Alles wat erin staat, inclusief de volledige geschiedenis, is dan voor iedereen leesbaar en blijft vindbaar, ook als je het later verwijdert. Zet er daarom **nooit** in:
@@ -125,6 +135,8 @@ Deze regels bepalen de uitkomsten. Controleer ze tegen de contracten.
 Eerlijk overzicht van de stand bij oplevering:
 
 - **Getest:** de rekenkern (21 tests); de TOTP-code tegen de officiële testvectoren van RFC 6238; de API van begin tot eind met PHP 8.3 en SQLite (46 controles: installatie, tweestapsverificatie, rechten per rol, blokkade, CSRF, conflicten, hergebruik van codes, blokkeren en herstellen); de hele inlogflow en de schermen in een echte browser, met de Content Security Policy actief; de QR-code met een onafhankelijke decoder.
+- **Aanvalstests** (`tests/aanval_test.py`, 46 aanvallen): toegang zonder of met te weinig rechten, half ingelogd, sessie-ID vooraf opdringen, gestolen cookie na uitloggen, CSRF met vreemde Origin, SQL-injectie, extra velden, te grote of te diep geneste verzoeken, 20 gelijktijdige opslagen, blokkade omzeilen met vervalste IP-koppen of hoofdletters, codes en installatiecode raden, e-mailadressen raden via de responstijd, opslag van wachtwoorden en geheimen, en het https-vereiste. Daarnaast een XSS-test in de browser met kwaadaardige namen, omschrijvingen en `javascript:`-links, in proefmodus en servermodus.
+- **Gevonden en opgelost bij die tests:** (1) een vervalste kop `X-Forwarded-Proto` omzeilde het https-vereiste; die kop wordt nu alleen vertrouwd met de instelling `achter_proxy`. (2) Een onbekend e-mailadres gaf een twee keer zo trage reactie, waardoor bestaande accounts te raden waren; nu even snel. (3) Links naar contracten en mappen accepteerden `javascript:`-adressen; nu alleen `http` en `https`.
 - **Niet getest:** MySQL. De code gebruikt standaard-SQL en de MySQL-functies `GET_LOCK` en `RELEASE_LOCK`, maar er draaide hier geen MySQL-server. Ook de `.htaccess`-regels zijn niet op een echte Apache- of LiteSpeed-server getest. Doe daarom stap 8 van de installatie.
 - **Eerste test op de hoster:** installeer met een testaccount, laad testgegevens, log in als lezer en controleer dat je niets kunt wijzigen. Pas daarna echte gegevens invoeren.
 - De rekenregels zijn een redelijke standaard, geen vervanging van de contracten. Vergelijk bij elke nieuwe lening het berekende schema met het contract (knop *Schema berekenen*).
@@ -137,6 +149,7 @@ Geen bouwstap en geen afhankelijkheden: gewone HTML, CSS, JavaScript-modules en 
 node --test tests/engine.test.mjs                                   # rekenkern
 KULL_CONFIG=/tmp/test-config.php php -S 127.0.0.1:8790 -t .        # app en API lokaal
 python3 tests/api_test.py http://127.0.0.1:8790/api/index.php       # API-test (lege testdatabase)
+python3 tests/aanval_test.py 127.0.0.1:8790 <ip>:8790 <sqlite-bestand>  # aanvalstests (lege testdatabase)
 ```
 
 Mappen:

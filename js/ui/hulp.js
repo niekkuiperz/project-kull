@@ -87,3 +87,10 @@ export function leesGetal(v, { duizendtallen = true } = {}) {
   if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
   return Number(t);
 }
+
+// Alleen gewone webadressen als link toestaan. Een "javascript:"- of "data:"-
+// adres zou code kunnen uitvoeren bij wie erop klikt.
+export function veiligeUrl(url) {
+  const t = String(url || '').trim();
+  return /^https?:\/\/[^\s]+$/i.test(t) ? t : '';
+}

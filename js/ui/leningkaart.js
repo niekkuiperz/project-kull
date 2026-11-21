@@ -1,4 +1,4 @@
-import { esc, euro, datum, TEKST } from './hulp.js';
+import { esc, euro, datum, TEKST, veiligeUrl } from './hulp.js';
 import { STATUS_TEKST } from '../engine/verwerking.js';
 import { beschrijfWijziging } from './leningen.js';
 import { signaalTabel } from './dashboard.js';
@@ -59,7 +59,7 @@ export function toon(app, root, [id]) {
           ${rij('Bijzonderheden', esc(l.bijzonderheden))}
           ${rij('Beginstand', l.beginstand ? `${euro(Math.round(l.beginstand.saldo * 100))} per ${datum(l.beginstand.datum)}` : '')}
           ${rij('Kwijtgescholden per', l.kwijtschelding_datum ? datum(l.kwijtschelding_datum) : '')}
-          ${rij('Document', l.document_url ? `<a href="${esc(l.document_url)}" target="_blank" rel="noopener">Contract of akte openen</a>` : '')}
+          ${rij('Document', veiligeUrl(l.document_url) ? `<a href="${esc(veiligeUrl(l.document_url))}" target="_blank" rel="noopener noreferrer">Contract of akte openen</a>` : (l.document_url ? 'Ongeldige link (alleen http of https)' : ''))}
         </table>
         ${l.wijzigingen?.length ? `<h3>Wijzigingen</h3><ul>${l.wijzigingen.map((w) => `<li>${datum(w.datum)}: ${esc(beschrijfWijziging(w))}${w.toelichting ? ` (${esc(w.toelichting)})` : ''}</li>`).join('')}</ul>` : ''}
       </section>

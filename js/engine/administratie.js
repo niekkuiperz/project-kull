@@ -214,6 +214,7 @@ export function controleerLening(l, data) {
   const rente = Number(l.rente);
   if (!Number.isFinite(rente) || rente < 0 || rente > 25) fouten.push('Rente moet tussen 0 en 25 procent liggen.');
   if (l.eerste_vervaldatum && !isGeldig(l.eerste_vervaldatum)) fouten.push('Eerste vervaldatum is ongeldig.');
+  if (l.document_url && !/^https?:\/\/\S+$/i.test(String(l.document_url).trim())) fouten.push('De link naar het contract moet beginnen met http:// of https://.');
   if (l.beginstand) {
     if (!isGeldig(l.beginstand.datum)) fouten.push('Datum beginstand is ongeldig.');
     if (!(Number(l.beginstand.saldo) >= 0)) fouten.push('Beginsaldo moet nul of meer zijn.');

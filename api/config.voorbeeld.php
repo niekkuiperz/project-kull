@@ -20,6 +20,11 @@ return [
     // mag je hem laten staan; hij werkt alleen zolang er nog geen gebruikers zijn.
     'installatie_code' => 'VERVANG_DOOR_EEN_EIGEN_CODE',
 
+    // Alleen op true zetten als de app ondanks https meldt dat inloggen alleen
+    // via een beveiligde verbinding kan. Dat gebeurt bij hosters die https
+    // afhandelen in een proxy vóór de webserver.
+    'achter_proxy' => false,
+
     // Naam die in de authenticator-app verschijnt.
     'app_naam' => 'Project Kull',
 ];

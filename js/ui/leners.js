@@ -1,4 +1,4 @@
-import { esc, euro, nieuwId, formData, meldingen } from './hulp.js';
+import { esc, euro, nieuwId, formData, meldingen, veiligeUrl } from './hulp.js';
 import { normaliseerIban } from '../engine/administratie.js';
 
 export function toon(app, root, [id]) {
@@ -54,7 +54,7 @@ function toonFormulier(app, root, id) {
     </form>
     ${!nieuw ? `<section><h2>Leningen</h2>
       ${leningen.length ? `<ul>${leningen.map((n) => `<li><a href="#/lening/${esc(n.id)}">${esc(n.nummer)}</a> (${esc(n.status || 'lopend')}) ${euro(app.verwerking.resultaten.get(n.id).saldo)}</li>`).join('')}</ul>` : '<p class="leeg">Geen leningen.</p>'}
-      ${l.map_url ? `<p><a href="${esc(l.map_url)}" target="_blank" rel="noopener">Open map met documenten</a></p>` : ''}
+      ${veiligeUrl(l.map_url) ? `<p><a href="${esc(veiligeUrl(l.map_url))}" target="_blank" rel="noopener noreferrer">Open map met documenten</a></p>` : ''}
       <p><a href="#/rapporten">Jaaroverzicht voor deze lener</a></p>
     </section>` : ''}`;
 
@@ -64,6 +64,7 @@ function toonFormulier(app, root, id) {
     const fouten = [];
     const naam = String(f.naam || '').trim();
     if (!naam) fouten.push('Naam is verplicht.');
+    if (f.map_url && !veiligeUrl(f.map_url)) fouten.push('De link naar de map moet beginnen met http:// of https://.');
     const rekeningen = String(f.tegenrekeningen || '').split('\n').map((t) => t.trim()).filter(Boolean);
     for (const r of rekeningen) {
       const andere = app.data.leners.find((x) => x.id !== l.id && x.tegenrekeningen.some((t) => normaliseerIban(t) === normaliseerIban(r)));

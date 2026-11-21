@@ -186,9 +186,13 @@ function clientIp(): string
 // ---------------------------------------------------------------------------
 function isHttps(): bool
 {
-    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || (($_SERVER['SERVER_PORT'] ?? '') === '443')
-        || strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+    if ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') === '443')) {
+        return true;
+    }
+    // Een X-Forwarded-Proto-kop kan iedere bezoeker meesturen. Alleen vertrouwen
+    // als de hoster een proxy gebruikt die deze kop zelf zet (instelling achter_proxy).
+    return !empty(config()['achter_proxy'])
+        && strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
 }
 
 // Wachtwoorden en codes alleen over een versleutelde verbinding. Uitzondering:
@@ -398,11 +402,13 @@ function tijdelijkWachtwoord(): string
 }
 
 // Om te voorkomen dat aan de responstijd te zien is of een e-mailadres bestaat.
+// Vaste hash (zelfde algoritme en kosten als echte wachtwoorden), zodat er
+// per verzoek niet ook nog een hash berekend hoeft te worden.
+const NEP_HASH = '$2y$10$mv36jmsKsnSJInkOLkSNI.oa5/wGpm5svw66w4wTFKJU3S4pGTkrW';
+
 function nepVerificatie(string $wachtwoord): void
 {
-    static $hash = null;
-    $hash ??= password_hash('nep-wachtwoord-voor-gelijke-tijd', PASSWORD_DEFAULT);
-    password_verify($wachtwoord, $hash);
+    password_verify($wachtwoord, NEP_HASH);
 }
 
 // ---------------------------------------------------------------------------
