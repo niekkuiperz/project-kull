@@ -11,7 +11,10 @@ import * as invoer from './ui/invoer.js';
 import * as rapporten from './ui/rapporten.js';
 import * as instellingen from './ui/instellingen.js';
 import * as hulpScherm from './ui/help.js';
+import * as gebruikers from './ui/gebruikers.js';
+import * as account from './ui/account.js';
 import { toonInloggen } from './ui/inloggen.js';
+import { ServerOpslag, SessieVerlopen } from './opslag/server.js';
 
 const ROUTES = [
   { patroon: /^#\/?$/, scherm: dashboard },
@@ -24,6 +27,8 @@ const ROUTES = [
   { patroon: /^#\/rapporten$/, scherm: rapporten },
   { patroon: /^#\/instellingen$/, scherm: instellingen },
   { patroon: /^#\/help$/, scherm: hulpScherm },
+  { patroon: /^#\/gebruikers$/, scherm: gebruikers },
+  { patroon: /^#\/account$/, scherm: account },
 ];
 
 function normaliseer(data) {
@@ -68,7 +73,7 @@ export const app = {
       return true;
     } catch (e) {
       toast(e.message, 'fout');
-      if (e instanceof ConflictFout) setTimeout(() => location.reload(), 4000);
+      if (e instanceof ConflictFout || e instanceof SessieVerlopen) setTimeout(() => location.reload(), 4000);
       return false;
     }
   },
@@ -99,11 +104,15 @@ export const app = {
       return;
     }
     const params = hash.match(route.patroon).slice(1);
-    try {
-      route.scherm.toon(this, main, params, route, new URLSearchParams(query || ''));
-    } catch (e) {
+    const fout = (e) => {
       console.error(e);
       main.innerHTML = `<div class="melding fout">Er ging iets mis bij het tonen van deze pagina: ${esc(e.message)}</div>`;
+      if (e instanceof SessieVerlopen) setTimeout(() => location.reload(), 3000);
+    };
+    try {
+      Promise.resolve(route.scherm.toon(this, main, params, route, new URLSearchParams(query || ''))).catch(fout);
+    } catch (e) {
+      fout(e);
     }
     window.scrollTo(0, 0);
   },
@@ -123,7 +132,9 @@ function toonKop() {
     ? '<span class="label waarschuwing" title="Gegevens staan alleen in deze browser">Lokaal op deze computer</span>'
     : '<span class="label">Gedeelde database</span>';
   const rol = { beheerder: 'beheerder', eigenaar: 'bewerken', lezer: 'alleen lezen' }[app.gebruiker.rol] || app.gebruiker.rol;
-  info.innerHTML = `${modus} <span>${esc(app.gebruiker.naam)} (${esc(rol)})</span>${app.opslag.modus === 'supabase' ? ' <button type="button" class="link" id="uitloggen">Uitloggen</button>' : ''}`;
+  const server = app.opslag.modus === 'server';
+  info.innerHTML = `${modus} ${server ? `<a href="#/account">${esc(app.gebruiker.naam)}</a>` : `<span>${esc(app.gebruiker.naam)}</span>`} <span>(${esc(rol)})</span>${server ? ' <button type="button" class="link" id="uitloggen">Uitloggen</button>' : ''}`;
+  document.getElementById('nav-gebruikers').hidden = !(server && app.gebruiker.rol === 'beheerder');
   document.getElementById('uitloggen')?.addEventListener('click', async () => {
     await app.opslag.uitloggen();
     location.reload();
@@ -134,9 +145,8 @@ function toonKop() {
 async function start() {
   const main = document.getElementById('inhoud');
   try {
-    if (CONFIG.supabaseUrl && CONFIG.supabaseSleutel) {
-      const { SupabaseOpslag } = await import('./opslag/supabase.js');
-      app.opslag = await new SupabaseOpslag(CONFIG.supabaseUrl, CONFIG.supabaseSleutel).start();
+    if (CONFIG.api) {
+      app.opslag = new ServerOpslag(CONFIG.api);
       await toonInloggen(app.opslag, main);
     } else {
       app.opslag = new LokaleOpslag();
@@ -153,6 +163,7 @@ async function start() {
   } catch (e) {
     console.error(e);
     main.innerHTML = `<div class="melding fout"><strong>De administratie kon niet worden geladen.</strong><p>${esc(e.message)}</p></div>`;
+    if (e instanceof SessieVerlopen) setTimeout(() => location.reload(), 3000);
   }
 }
 

@@ -3,3 +3,8 @@ node_modules/
 *.log
 # Back-ups met echte gegevens horen niet in git
 leningadministratie-backup-*.json
+
+# Serverinstellingen en gegevens horen nooit in git
+api/config.php
+api/data/*
+!api/data/.htaccess

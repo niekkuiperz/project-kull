@@ -1,0 +1,24 @@
+# Beveiligingsinstellingen voor Apache en LiteSpeed (gebruikt door de meeste
+# Nederlandse webhosters).
+Options -Indexes
+
+# Bestanden die niet bedoeld zijn voor bezoekers.
+RedirectMatch 404 /\.(git|github)(/|$)
+RedirectMatch 404 /tests(/|$)
+<FilesMatch "\.(md|mjs|sql|yml|json)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "DENY"
+    Header always set Referrer-Policy "no-referrer"
+    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+</IfModule>
+
+# Zet HTTPS afdwingen bij voorkeur aan in het controlepaneel van de hoster.
+# Kan dat daar niet, haal dan het hekje weg voor de drie regels hieronder.
+# RewriteEngine On
+# RewriteCond %{HTTPS} !=on
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]

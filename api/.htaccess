@@ -1,0 +1,8 @@
+# Alleen index.php is van buitenaf bereikbaar. config.php, lib/ en data/ niet.
+Options -Indexes
+<FilesMatch ".*">
+    Require all denied
+</FilesMatch>
+<Files "index.php">
+    Require all granted
+</Files>

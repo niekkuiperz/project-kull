@@ -7,7 +7,7 @@ De app berekent per lening het schema van verwachte termijnen, zet de ontvangste
 ## Inhoud
 
 1. [Snel uitproberen](#snel-uitproberen)
-2. [Echt gebruiken: hosting en database](#echt-gebruiken-hosting-en-database)
+2. [Echt gebruiken: bij een Nederlandse webhoster](#echt-gebruiken-bij-een-nederlandse-webhoster)
 3. [Rekenregels](#rekenregels)
 4. [Eisen en waar ze zitten](#eisen-en-waar-ze-zitten)
 5. [Wat nog niet getest is](#wat-nog-niet-getest-is)
@@ -27,52 +27,58 @@ Open daarna <http://localhost:8000> en kies **Instellingen > Fictieve testgegeve
 
 Geen Python? In Visual Studio Code werkt de extensie *Live Server* ook.
 
-## Echt gebruiken: hosting en database
+## Echt gebruiken: bij een Nederlandse webhoster
 
-Voor gebruik door drie mensen vanaf elke computer (eis F-22) zijn twee dingen nodig:
+De app draait op een gewoon webhostingpakket met PHP en MySQL, zoals Antagonist, Vimexx of TransIP dat bieden. De map `api/` is de backend: inloggen, tweestapsverificatie, rollen en opslag. Er is geen andere dienst nodig.
 
-| Onderdeel | Wat | Voorstel |
-| --- | --- | --- |
-| Pagina's | De bestanden in deze repository (HTML, CSS, JavaScript). Bevat geen gegevens en geen geheimen. | GitHub Pages of een andere statische host |
-| Database en inloggen | Leningen, ontvangsten, accounts, tweestapsverificatie, rechten | Supabase, regio Frankfurt (EU) |
+### Wat je nodig hebt
 
-### Kosten en beperkingen
+- Een webhostingpakket met **PHP 8.1 of nieuwer**, de PHP-extensies **pdo_mysql** en **sodium** (standaard bij vrijwel elke hoster), en een **MySQL**- of MariaDB-database.
+- Een domeinnaam of subdomein, bijvoorbeeld `administratie.jouwdomein.nl`.
+- **SSL (https)**. Bijna elke hoster biedt gratis Let's Encrypt. Zonder https weigert de app het inloggen.
 
-- **Supabase Free** pauzeert een project na een week met weinig activiteit. Bij maandelijks gebruik gebeurt dat dus vrijwel zeker. Gegevens blijven bewaard en je zet het project in het dashboard weer aan, maar dat is lastig voor wie de app alleen af en toe gebruikt. Het **Pro-abonnement** (25 dollar per maand volgens de prijspagina van Supabase) pauzeert niet. Controleer de actuele prijs op <https://supabase.com/pricing>.
-- **Gekozen aanpak:** Supabase Free met een dagelijkse automatische aanroep (zie stap 9), zodat het project niet pauzeert. Supabase noemt dat zelf "meestal genoeg", maar geeft geen garantie. Pauzeert het toch, dan staat het project in het dashboard met één klik weer aan; gegevens blijven bewaard.
-- Supabase Free maakt geen automatische back-ups. Gebruik daarom de knop **Download back-up** onder Instellingen en bewaar dat bestand op een tweede plek (eis N-03). De versiegeschiedenis in de database helpt bij een fout, maar is geen back-up.
-- **GitHub Pages** is op een gratis GitHub-account alleen beschikbaar vanuit een **openbare** repository. Voor een privé-repository is GitHub Pro nodig. De code bevat geen gegevens of geheimen, dus openbaar is technisch veilig; wil je dat niet, kies dan GitHub Pro of een andere host.
+### Installeren
 
-### Stappen
-
-1. **Supabase-project aanmaken** op <https://supabase.com>. Kies regio *Central EU (Frankfurt)*.
-2. **Database inrichten:** open *SQL Editor*, plak de inhoud van [`supabase/schema.sql`](supabase/schema.sql) en klik *Run*.
-3. **Openbare aanmelding uitzetten:** *Authentication > Sign In / Providers*: zet "Allow new users to sign up" uit. Alleen uitgenodigde mensen kunnen dan een account hebben.
-4. **Accounts aanmaken:** *Authentication > Users > Invite user* voor elke gebruiker. Iedereen kiest via de uitnodigingsmail een wachtwoord.
-5. **Rollen toekennen:** voer onderaan `schema.sql` de drie `insert`-regels uit, met de juiste e-mailadressen. Rollen: `beheerder` (alles), `eigenaar` (bewerken), `lezer` (alleen lezen).
-6. **App koppelen:** zet in [`js/config.js`](js/config.js) de *Project URL* en de *publishable* (of *anon*) sleutel uit *Project Settings > API*. Gebruik nooit de *secret* of *service_role* sleutel.
-7. **Publiceren:** repository-instellingen > *Pages* > bron: branch `main`, map `/`. Na een minuut staat de app op `https://<gebruikersnaam>.github.io/<repository>/`.
-8. **Inloggen en tweestapsverificatie instellen:** bij de eerste keer inloggen toont de app een QR-code voor een authenticator-app. Zonder die code kom je niet bij de gegevens (eis N-02, afgedwongen in de database).
-9. **Wakker houden instellen:** zet in GitHub onder *Settings > Secrets and variables > Actions* twee secrets: `SUPABASE_URL` (de Project URL) en `SUPABASE_SLEUTEL` (de publishable sleutel). De workflow [`supabase-wakker-houden`](.github/workflows/supabase-wakker-houden.yml) roept dan elke dag de functie `ping` aan, die alleen het getal 1 teruggeeft. Test hem via *Actions > Supabase wakker houden > Run workflow*. GitHub zet geplande workflows uit na 60 dagen zonder activiteit in de repository en stuurt daar vooraf een e-mail over; zet hem dan weer aan.
-10. **Eerste gegevens:** probeer de app eerst met testgegevens (Instellingen), maak hem daarna leeg en voer de echte leners en leningen in.
+1. **Database aanmaken** in het controlepaneel van de hoster. Noteer databasenaam, gebruikersnaam en wachtwoord (in je wachtwoordbeheerder).
+2. **SSL aanzetten** voor het domein, en "HTTPS afdwingen" als de hoster die optie heeft.
+3. **Instellingen:** kopieer `api/config.voorbeeld.php` naar `api/config.php` en vul in:
+   - de databasegegevens;
+   - `sleutel`: een lange willekeurige tekst (minstens 32 tekens) uit je wachtwoordbeheerder. Bewaar hem daar ook;
+   - `installatie_code`: een zelfbedachte code voor het aanmaken van het eerste account.
+4. **App koppelen:** zet in `js/config.js` de regel `api: 'api/index.php',`.
+5. **Uploaden** met FTP of het bestandsbeheer van de hoster naar de map van het domein (vaak `public_html` of `www`): `index.html`, `.htaccess`, en de mappen `css`, `js` en `api`. De mappen `tests` en `.github` en de README hoeven niet mee.
+6. **Eerste account:** open het adres in je browser. De app vraagt om de installatiecode; maak daarmee je beheerdersaccount aan en koppel je authenticator-app.
+7. **Andere gebruikers:** menu *Gebruikers* > *Gebruiker toevoegen*. De app maakt een tijdelijk wachtwoord dat je persoonlijk doorgeeft. Bij de eerste keer inloggen koppelt de gebruiker een authenticator-app en kiest een eigen wachtwoord.
+8. **Controleren:** open `https://jouwdomein/api/config.php` en `https://jouwdomein/api/lib/kern.php` in je browser. Je moet een foutmelding (403 of 404) krijgen, geen inhoud. Krijg je wel iets te zien, stop dan en controleer of het bestand `api/.htaccess` is geüpload.
+9. **Eerste gegevens:** probeer de app eerst met testgegevens (Instellingen), maak hem daarna leeg en voer de echte leners en leningen in.
 
 ### Hoe de beveiliging werkt
 
-- Lezen kan alleen met een account dat in de tabel `gebruikers` staat **en** met tweestapsverificatie is ingelogd.
-- Schrijven gaat alleen via de databasefunctie `opslaan`, en alleen voor beheerder en eigenaar.
-- Elke keer opslaan maakt een nieuwe versie. Oude versies kunnen via de app niet worden gewijzigd of verwijderd. Onder Instellingen kun je een eerdere versie terugzetten; dat wordt weer een nieuwe versie.
-- Slaan twee mensen tegelijk op, dan wordt de tweede geweigerd met een melding om de pagina te herladen. Zo overschrijft niemand elkaars werk.
-- De knoppen in de app volgen de rol, maar de echte controle zit in de database.
+- **Inloggen in twee stappen:** wachtwoord plus een code uit een authenticator-app (eis N-02). Zonder beide stappen geeft de server geen gegevens.
+- **Wachtwoorden** worden opgeslagen met de standaard hashfunctie van PHP (`password_hash`), nooit leesbaar. Minimaal 12 tekens.
+- **Geheimen van de authenticator-apps** staan versleuteld in de database, met de `sleutel` uit `config.php`.
+- **Blokkade:** na 5 mislukte pogingen (wachtwoord of code) op een account, of 20 vanaf één IP-adres, is inloggen 15 minuten geblokkeerd. Een code uit de app werkt maar één keer.
+- **Sessies** verlopen na 30 minuten zonder activiteit en altijd na 12 uur. Bij het blokkeren of herstellen van een account, of een nieuw wachtwoord, vervallen de open sessies van die gebruiker direct.
+- **Rollen** worden op de server gecontroleerd: `beheerder` (alles, ook gebruikers), `eigenaar` (bewerken), `lezer` (alleen lezen). De knoppen in de app volgen dat alleen.
+- **Versiegeschiedenis:** elke keer opslaan maakt een nieuwe versie; via de app is geen versie te wijzigen of te wissen. Slaan twee mensen tegelijk op, dan wordt de tweede geweigerd met een melding om te herladen.
+- **Logboek:** inlogpogingen en wijzigingen in accounts staan onder *Gebruikers*.
+- **Afscherming:** `api/.htaccess` laat alleen `api/index.php` toe; de hoofd-`.htaccess` zet beveiligingskoppen (onder meer een Content Security Policy) en verbergt de testbestanden.
+
+### Back-ups
+
+- De meeste hosters maken dagelijks een back-up van bestanden en database. Controleer dat bij jouw pakket.
+- Gebruik daarnaast maandelijks de knop **Download back-up** onder Instellingen en bewaar dat bestand op een tweede, losse plek (eis N-03).
+- Bewaar `api/config.php` (of in elk geval de `sleutel`) in je wachtwoordbeheerder. Zonder die sleutel moet iedereen de authenticator-app opnieuw koppelen.
 
 ## Openbare repository: wat er nooit in mag
 
 Deze repository kan openbaar zijn. Alles wat erin staat, inclusief de volledige geschiedenis, is dan voor iedereen leesbaar en blijft vindbaar, ook als je het later verwijdert. Zet er daarom **nooit** in:
 
+- **`api/config.php`**, met de databasegegevens, de sleutel en de installatiecode.
+- **De database** of een SQLite-bestand uit `api/data/`.
 - **Back-upbestanden** (`leningadministratie-backup-*.json`) of andere bestanden met echte namen, bedragen of rekeningnummers.
-- **De secret- of service_role-sleutel** van Supabase. Alleen de publishable (of anon) sleutel hoort in `js/config.js`.
-- **Echte e-mailadressen** in `supabase/schema.sql`. Voer de `insert`-regels uit in de SQL Editor van Supabase, maar sla de ingevulde versie niet op in de repository.
 
-Het bestand `.gitignore` houdt back-ups buiten git, maar **niet** bij uploaden via de website van GitHub: daar wordt alles geüpload wat je erin sleept.
+Het bestand `.gitignore` houdt deze bestanden buiten git, maar **niet** bij uploaden via de website van GitHub: daar wordt alles geüpload wat je erin sleept.
 
 ## Rekenregels
 
@@ -108,7 +114,7 @@ Deze regels bepalen de uitkomsten. Controleer ze tegen de contracten.
 | F-18 | Jaaroverzicht per geldgever | Rapporten (PDF en CSV) |
 | F-19 | Leningkaart | Leningkaart, afdrukbaar |
 | F-20 | Jaaroverzicht per lener | Rapporten |
-| F-21, F-22, N-01, N-02 | Rollen, online, eigen accounts, tweestapsverificatie | Supabase, `schema.sql` |
+| F-21, F-22, N-01, N-02 | Rollen, online, eigen accounts, tweestapsverificatie | `api/`, menu Gebruikers |
 | N-03 | Versiegeschiedenis en back-up | Database, Instellingen |
 | N-04 | Rekenregels beschermd | Rekenregels zitten in de code, niet in bewerkbare cellen |
 | N-05 | PDF en papier | Afdrukknoppen |
@@ -118,31 +124,36 @@ Deze regels bepalen de uitkomsten. Controleer ze tegen de contracten.
 
 Eerlijk overzicht van de stand bij oplevering:
 
-- **Getest:** de rekenkern (21 geautomatiseerde tests), de schermen in de proefmodus met testgegevens in een echte browser, en `schema.sql` op een lokale PostgreSQL 16-database met nagebootste Supabase-rollen (rechten per rol, tweestapsverificatie, conflict bij gelijktijdig opslaan, onwijzigbare geschiedenis).
-- **Niet getest:** de koppeling met een echt Supabase-project (`js/opslag/supabase.js` en het inlogscherm). Die code volgt de documentatie van supabase-js versie 2, maar de eerste echte inlog kan nog een aanpassing vragen.
-- **Eerste test met Supabase:** doe stap 1 t/m 8 met een testaccount, laad testgegevens, log in als lezer en controleer dat je niets kunt wijzigen. Pas daarna echte gegevens invoeren.
+- **Getest:** de rekenkern (21 tests); de TOTP-code tegen de officiële testvectoren van RFC 6238; de API van begin tot eind met PHP 8.3 en SQLite (46 controles: installatie, tweestapsverificatie, rechten per rol, blokkade, CSRF, conflicten, hergebruik van codes, blokkeren en herstellen); de hele inlogflow en de schermen in een echte browser, met de Content Security Policy actief; de QR-code met een onafhankelijke decoder.
+- **Niet getest:** MySQL. De code gebruikt standaard-SQL en de MySQL-functies `GET_LOCK` en `RELEASE_LOCK`, maar er draaide hier geen MySQL-server. Ook de `.htaccess`-regels zijn niet op een echte Apache- of LiteSpeed-server getest. Doe daarom stap 8 van de installatie.
+- **Eerste test op de hoster:** installeer met een testaccount, laad testgegevens, log in als lezer en controleer dat je niets kunt wijzigen. Pas daarna echte gegevens invoeren.
 - De rekenregels zijn een redelijke standaard, geen vervanging van de contracten. Vergelijk bij elke nieuwe lening het berekende schema met het contract (knop *Schema berekenen*).
 
 ## Ontwikkelen en testen
 
-Geen bouwstap en geen afhankelijkheden: gewone HTML, CSS en JavaScript-modules. Alleen de koppeling met Supabase laadt `@supabase/supabase-js` in de browser vanaf esm.sh.
+Geen bouwstap en geen afhankelijkheden: gewone HTML, CSS, JavaScript-modules en PHP. De QR-encoder van Kazuhiko Arase (MIT) zit in `js/vendor/`.
 
 ```bash
-node --test tests/engine.test.mjs   # rekenkern
-python3 -m http.server 8000         # app lokaal
+node --test tests/engine.test.mjs                                   # rekenkern
+KULL_CONFIG=/tmp/test-config.php php -S 127.0.0.1:8790 -t .        # app en API lokaal
+python3 tests/api_test.py http://127.0.0.1:8790/api/index.php       # API-test (lege testdatabase)
 ```
 
 Mappen:
 
 ```
 index.html            startpagina
+.htaccess             beveiligingskoppen voor Apache en LiteSpeed
 css/app.css           opmaak, inclusief afdrukstijl
 js/app.js             opstarten, navigatie, opslaan
-js/config.js          koppeling met Supabase
+js/config.js          proefmodus of server
 js/engine/            rekenkern (geen scherm, geen opslag)
-js/opslag/            lokale opslag en Supabase
+js/opslag/            lokale opslag en server
 js/ui/                schermen
+js/vendor/            QR-encoder
 js/testdata.js        fictieve testgegevens
-supabase/schema.sql   database-inrichting
+api/index.php         API (enige bereikbare PHP-bestand)
+api/lib/              kern en TOTP
+api/config.voorbeeld.php  voorbeeld voor api/config.php
 tests/                geautomatiseerde tests
 ```
