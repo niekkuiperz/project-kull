@@ -15,6 +15,10 @@ RedirectMatch 404 /tests(/|$)
     Header always set X-Frame-Options "DENY"
     Header always set Referrer-Policy "no-referrer"
     Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    # Niet opnemen in zoekmachines. Bewust GEEN robots.txt met Disallow:
+    # dan zien zoekmachines deze noindex niet en kan het adres toch
+    # (zonder inhoud) in de zoekresultaten komen.
+    Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
 </IfModule>
 
 # Zet HTTPS afdwingen bij voorkeur aan in het controlepaneel van de hoster.
