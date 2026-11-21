@@ -41,22 +41,24 @@ De app draait op een gewoon webhostingpakket met PHP en MySQL, zoals Antagonist,
 
 1. **Database aanmaken** in het controlepaneel van de hoster. Noteer databasenaam, gebruikersnaam en wachtwoord (in je wachtwoordbeheerder).
 2. **SSL aanzetten** voor het domein, en "HTTPS afdwingen" als de hoster die optie heeft.
-3. **Instellingen:** kopieer `api/config.voorbeeld.php` naar `api/config.php` en vul in:
+3. **Instellingen:** kopieer `api/config.voorbeeld.php` naar **`kull-config.php` in de map boven de webroot** (bij Plesk: naast `httpdocs`, dus in de hoofdmap van het domein). Daar is het bestand van buitenaf nooit bereikbaar, ook niet als de webserver de `.htaccess`-regels negeert. Vul in:
    - de databasegegevens;
    - `sleutel`: een lange willekeurige tekst (minstens 32 tekens) uit je wachtwoordbeheerder. Bewaar hem daar ook;
-   - `installatie_code`: een zelfbedachte code voor het aanmaken van het eerste account.
+   - `installatie_code`: een zelfbedachte code van minstens 12 tekens voor het aanmaken van het eerste account.
+   Gebruik in deze waarden geen enkel aanhalingsteken (`'`) en geen backslash (`\`). De app start niet zolang er nog een voorbeeldwaarde in staat.
+   Kan je hoster geen bestanden boven de webroot plaatsen, gebruik dan `api/config.php`. De app zoekt in deze volgorde: de omgevingsvariabele `KULL_CONFIG`, `kull-config.php` boven de webroot, `api/config.php`.
 4. **App koppelen:** zet in `js/config.js` de regel `api: 'api/index.php',`.
 5. **Uploaden** met FTP of het bestandsbeheer van de hoster naar de map van het domein (vaak `public_html` of `www`): `index.html`, `.htaccess`, en de mappen `css`, `js` en `api`. De mappen `tests` en `.github` en de README hoeven niet mee.
 6. **Eerste account:** open het adres in je browser. De app vraagt om de installatiecode; maak daarmee je beheerdersaccount aan en koppel je authenticator-app.
 7. **Andere gebruikers:** menu *Gebruikers* > *Gebruiker toevoegen*. De app maakt een tijdelijk wachtwoord dat je persoonlijk doorgeeft. Bij de eerste keer inloggen koppelt de gebruiker een authenticator-app en kiest een eigen wachtwoord.
-8. **Controleren:** open `https://jouwdomein/api/config.php` en `https://jouwdomein/api/lib/kern.php` in je browser. Je moet een foutmelding (403 of 404) krijgen, geen inhoud. Krijg je wel iets te zien, stop dan en controleer of het bestand `api/.htaccess` is geüpload.
+8. **Controleren:** open eenmalig `https://jouwdomein/api/lib/kern.php`, `https://jouwdomein/README.md` en `https://jouwdomein/api/config.voorbeeld.php` in je browser. Je moet een foutmelding (403 of 404) krijgen of een lege pagina, nooit de inhoud van het bestand. Krijg je wel iets te zien, stop dan en controleer of de `.htaccess`-bestanden zijn geüpload. Doe dit met de hand, één keer per adres: herhaald of geautomatiseerd aftasten kan door de firewall van de hoster als aanval worden gezien.
 9. **Eerste gegevens:** probeer de app eerst met testgegevens (Instellingen), maak hem daarna leeg en voer de echte leners en leningen in.
 
 ### Hoe de beveiliging werkt
 
 - **Inloggen in twee stappen:** wachtwoord plus een code uit een authenticator-app (eis N-02). Zonder beide stappen geeft de server geen gegevens.
 - **Wachtwoorden** worden opgeslagen met de standaard hashfunctie van PHP (`password_hash`), nooit leesbaar. Minimaal 12 tekens.
-- **Geheimen van de authenticator-apps** staan versleuteld in de database, met de `sleutel` uit `config.php`.
+- **Geheimen van de authenticator-apps** staan versleuteld in de database, met de `sleutel` uit het configuratiebestand.
 - **Blokkade:** na 5 mislukte pogingen (wachtwoord of code) op een account, of 20 vanaf één IP-adres, is inloggen 15 minuten geblokkeerd. Een code uit de app werkt maar één keer.
 - **Sessies** verlopen na 30 minuten zonder activiteit en altijd na 12 uur. Bij het blokkeren of herstellen van een account, of een nieuw wachtwoord, vervallen de open sessies van die gebruiker direct.
 - **Rollen** worden op de server gecontroleerd: `beheerder` (alles, ook gebruikers), `eigenaar` (bewerken), `lezer` (alleen lezen). De knoppen in de app volgen dat alleen.
@@ -68,7 +70,7 @@ De app draait op een gewoon webhostingpakket met PHP en MySQL, zoals Antagonist,
 
 - De meeste hosters maken dagelijks een back-up van bestanden en database. Controleer dat bij jouw pakket.
 - Gebruik daarnaast maandelijks de knop **Download back-up** onder Instellingen en bewaar dat bestand op een tweede, losse plek (eis N-03).
-- Bewaar `api/config.php` (of in elk geval de `sleutel`) in je wachtwoordbeheerder. Zonder die sleutel moet iedereen de authenticator-app opnieuw koppelen.
+- Bewaar `kull-config.php` (of in elk geval de `sleutel`) in je wachtwoordbeheerder. Zonder die sleutel moet iedereen de authenticator-app opnieuw koppelen.
 
 ### Noodprocedure: beheerder kan niet meer inloggen
 
@@ -84,7 +86,7 @@ Bij de volgende keer inloggen koppel je de app opnieuw. Tip: maak twee beheerder
 
 Deze repository kan openbaar zijn. Alles wat erin staat, inclusief de volledige geschiedenis, is dan voor iedereen leesbaar en blijft vindbaar, ook als je het later verwijdert. Zet er daarom **nooit** in:
 
-- **`api/config.php`**, met de databasegegevens, de sleutel en de installatiecode.
+- **`kull-config.php` of `api/config.php`**, met de databasegegevens, de sleutel en de installatiecode.
 - **De database** of een SQLite-bestand uit `api/data/`.
 - **Back-upbestanden** (`leningadministratie-backup-*.json`) of andere bestanden met echte namen, bedragen of rekeningnummers.
 

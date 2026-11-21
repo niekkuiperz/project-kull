@@ -8,3 +8,4 @@ leningadministratie-backup-*.json
 api/config.php
 api/data/*
 !api/data/.htaccess
+kull-config.php

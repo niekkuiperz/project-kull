@@ -1,6 +1,8 @@
 <?php
-// Kopieer dit bestand naar config.php (in dezelfde map) en vul het in.
-// config.php staat in .gitignore: zet het NOOIT in GitHub.
+// Kopieer dit bestand naar kull-config.php in de map BOVEN de webroot
+// (bij Plesk: naast httpdocs) en vul het in. Alleen als dat bij je hoster
+// niet kan: api/config.php. Zet het ingevulde bestand NOOIT in GitHub.
+// Gebruik in de waarden geen aanhalingsteken (') en geen backslash.
 
 return [
     // Database. MySQL (bij vrijwel elke Nederlandse webhoster):
@@ -16,7 +18,7 @@ return [
     // dan moet iedereen de app opnieuw koppelen.
     'sleutel' => 'VERVANG_DOOR_EEN_LANGE_WILLEKEURIGE_TEKST',
 
-    // Eenmalige code om de eerste beheerder aan te maken. Na de installatie
+    // Eenmalige code (minstens 12 tekens) om de eerste beheerder aan te maken. Na de installatie
     // mag je hem laten staan; hij werkt alleen zolang er nog geen gebruikers zijn.
     'installatie_code' => 'VERVANG_DOOR_EEN_EIGEN_CODE',
 

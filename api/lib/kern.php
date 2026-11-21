@@ -21,22 +21,57 @@ final class ApiFout extends Exception
     }
 }
 
+/**
+ * Waar de instellingen staan, in deze volgorde:
+ * 1. het pad in de omgevingsvariabele KULL_CONFIG;
+ * 2. kull-config.php in de map BOVEN de webroot (aanbevolen: van buitenaf
+ *    nooit bereikbaar, ook niet als de webserver .htaccess negeert);
+ * 3. api/config.php (alleen als 2 niet bestaat).
+ */
+function configBestand(): ?string
+{
+    $kandidaten = [];
+    if (getenv('KULL_CONFIG')) {
+        $kandidaten[] = getenv('KULL_CONFIG');
+    }
+    $kandidaten[] = dirname(__DIR__, 3) . '/kull-config.php';
+    $kandidaten[] = dirname(__DIR__) . '/config.php';
+    foreach ($kandidaten as $pad) {
+        if (@is_file($pad)) {
+            return $pad;
+        }
+    }
+    return null;
+}
+
 function config(): array
 {
     static $config = null;
     if ($config === null) {
-        $bestand = getenv('KULL_CONFIG') ?: __DIR__ . '/../config.php';
-        if (!is_file($bestand)) {
-            throw new ApiFout('De server is nog niet ingericht: api/config.php ontbreekt. Zie de README.', 500);
+        $bestand = configBestand();
+        if ($bestand === null) {
+            throw new ApiFout('De server is nog niet ingericht: kull-config.php ontbreekt. Zie de README.', 500);
         }
         $config = require $bestand;
+        if (!is_array($config)) {
+            throw new ApiFout('Het configuratiebestand is ongeldig. Zie de README.', 500);
+        }
         foreach (['db_dsn', 'sleutel', 'installatie_code'] as $verplicht) {
             if (empty($config[$verplicht])) {
-                throw new ApiFout("Instelling '$verplicht' ontbreekt in api/config.php.", 500);
+                throw new ApiFout("Instelling '$verplicht' ontbreekt in het configuratiebestand.", 500);
+            }
+        }
+        // Voorkom dat de app draait met de voorbeeldwaarden.
+        foreach ($config as $sleutelNaam => $waarde) {
+            if (is_string($waarde) && preg_match('/VERVANG|VUL_IN|NAAM_VAN_DE_DATABASE|GEBRUIKERSNAAM_VAN_DE_DATABASE|WACHTWOORD_VAN_DE_DATABASE/', $waarde)) {
+                throw new ApiFout("Instelling '$sleutelNaam' bevat nog een voorbeeldwaarde. Vul het configuratiebestand in.", 500);
             }
         }
         if (strlen($config['sleutel']) < 32) {
-            throw new ApiFout("De instelling 'sleutel' in api/config.php moet minstens 32 tekens lang zijn.", 500);
+            throw new ApiFout("De instelling 'sleutel' moet minstens 32 tekens lang zijn.", 500);
+        }
+        if (strlen($config['installatie_code']) < 12) {
+            throw new ApiFout("De instelling 'installatie_code' moet minstens 12 tekens lang zijn.", 500);
         }
     }
     return $config;
