@@ -47,7 +47,7 @@ export function toon(app, root, [id]) {
         <table class="kv">
           ${rij('Hoofdsom', euro(Math.round(l.hoofdsom * 100)))}
           ${rij('Ingangsdatum', datum(l.ingangsdatum))}
-          ${rij('Einddatum', l.einddatum ? datum(l.einddatum) : 'Geen (vrij aflossen)')}
+          ${rij('Einddatum', l.einddatum ? datum(l.einddatum) : 'Geen')}
           ${rij('Rente', `${esc(String(l.rente).replace('.', ','))}% per jaar, ${esc(l.rentetype || 'vast')}${l.herzieningsdatum ? `, herziening ${datum(l.herzieningsdatum)}` : ''}`)}
           ${rij('Aflossing', `${esc(TEKST.aflossingsvorm[l.aflossingsvorm])}, ${esc(TEKST.frequentie[l.frequentie].toLowerCase())}`)}
           ${rij('Betaling', esc(TEKST.betaalwijze[l.betaalwijze || 'samen']))}

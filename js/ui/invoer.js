@@ -46,7 +46,8 @@ export function toon(app, root, [id], _route, query) {
 
   root.innerHTML = `
     ${bewerk ? '<p><a href="#/invoer">&larr; Naar invoer</a></p>' : ''}
-    <h1>${bewerk ? 'Ontvangst bekijken of wijzigen' : 'Ontvangst invoeren'}</h1>
+    <h1>${bewerk ? 'Ontvangst wijzigen' : 'Ontvangst invoeren'}</h1>
+    ${bewerk ? herkomstHtml(bewerk) : ''}
     ${bewerk ? '' : '<p class="sub">Neem de bijschrijvingen over uit internetbankieren. Alleen leningbetalingen; andere bijschrijvingen blijven buiten de administratie.</p>'}
     <div id="meldingen"></div>
     <form id="ontvangst-form" class="formulier">
@@ -225,6 +226,15 @@ export function toon(app, root, [id], _route, query) {
   bindLijst(app, root);
 }
 
+// W-010: wie heeft deze ontvangst ingevoerd en wie het laatst gewijzigd.
+function herkomstHtml(o) {
+  const moment = (iso) => (iso ? new Date(iso).toLocaleString('nl-NL', { dateStyle: 'short', timeStyle: 'short' }) : '');
+  const delen = [];
+  if (o.ingevoerd_door || o.ingevoerd_op) delen.push(`Ingevoerd door ${esc(o.ingevoerd_door || 'onbekend')}${o.ingevoerd_op ? ` op ${esc(moment(o.ingevoerd_op))}` : ''}`);
+  if (o.gewijzigd_door || o.gewijzigd_op) delen.push(`laatst gewijzigd door ${esc(o.gewijzigd_door || 'onbekend')}${o.gewijzigd_op ? ` op ${esc(moment(o.gewijzigd_op))}` : ''}`);
+  return delen.length ? `<p class="sub">${delen.join('; ')}.</p>` : '';
+}
+
 function verwerkingHtml(app, o) {
   const rijen = o.regels.map((r, i) => {
     const lening = app.data.leningen.find((l) => l.id === r.lening_id);
@@ -240,10 +250,8 @@ function verwerkingHtml(app, o) {
       <td class="klein">${open.map((t) => `${datum(t.vervaldatum)}: rente ${euro(t.rente - t.ontvangen_rente)}, aflossing ${euro(t.aflossing - t.ontvangen_aflossing)}`).join('<br>') || 'geen'}</td>
     </tr>`;
   }).join('');
-  const meta = `Ingevoerd door ${esc(o.ingevoerd_door || '?')} op ${datum((o.ingevoerd_op || '').slice(0, 10))}${o.gewijzigd_door ? `, gewijzigd door ${esc(o.gewijzigd_door)} op ${datum(o.gewijzigd_op.slice(0, 10))}` : ''}.`;
   return `<section><h2>Verwerking</h2>
     <table class="tabel compact"><thead><tr><th>Lening</th><th class="getal">Bedrag</th><th>Verwerking</th><th class="getal">Rente</th><th class="getal">Aflossing</th><th>Nu nog open (oudste termijnen)</th></tr></thead><tbody>${rijen}</tbody></table>
-    <p class="noot">${meta}</p>
     <p class="hint">Te beoordelen? Zet in de verdeling hierboven "zelf verdelen" aan, vul rente en aflossing in volgens de afspraak met de lener, en sla op. Twijfel je, overleg dan eerst met de lener.</p></section>`;
 }
 
@@ -268,8 +276,8 @@ function lijstHtml(app, query) {
     <td>${o.regels.map((r) => esc(data.leningen.find((l) => l.id === r.lening_id)?.nummer || '?')).join(', ')}</td>
     <td class="getal">${euro(naarCenten(o.bedrag))}</td>
     <td>${esc(TEKST.wijze[status.get(o.id)] || '')}</td>
-    <td class="klein">${esc(o.ingevoerd_door || '')}</td>
-    <td><a href="#/invoer/${esc(o.id)}">${app.kanBewerken() ? 'Openen' : 'Bekijken'}</a></td>
+    <td class="klein">${esc(o.ingevoerd_door || '')}${o.gewijzigd_door ? `<br><span class="hint">gewijzigd door ${esc(o.gewijzigd_door)}</span>` : ''}</td>
+    <td>${app.kanBewerken() ? `<a class="knop klein secundair" href="#/invoer/${esc(o.id)}">Wijzigen</a>` : ''}</td>
   </tr>`;
   const kop = '<thead><tr><th>Datum</th><th>Lener</th><th>Lening</th><th class="getal">Bedrag</th><th>Verwerking</th><th>Door</th><th></th></tr></thead>';
   return `

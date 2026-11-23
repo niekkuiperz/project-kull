@@ -1,4 +1,5 @@
 import { CONFIG } from './config.js';
+import { VERSIE } from './versie.js';
 import { LokaleOpslag, ConflictFout } from './opslag/lokaal.js';
 import { verwerkAlles, legeAdministratie } from './engine/administratie.js';
 import { vandaag } from './engine/datum.js';
@@ -133,7 +134,7 @@ function toonKop() {
     : '<span class="label">Gedeelde database</span>';
   const rol = { beheerder: 'beheerder', eigenaar: 'bewerken', lezer: 'alleen lezen' }[app.gebruiker.rol] || app.gebruiker.rol;
   const server = app.opslag.modus === 'server';
-  info.innerHTML = `${modus} ${server ? `<a href="#/account">${esc(app.gebruiker.naam)}</a>` : `<span>${esc(app.gebruiker.naam)}</span>`} <span>(${esc(rol)})</span>${server ? ' <button type="button" class="link" id="uitloggen">Uitloggen</button>' : ''}`;
+  info.innerHTML = `${modus} ${server ? `<a href="#/account">${esc(app.gebruiker.naam)}</a>` : `<span>${esc(app.gebruiker.naam)}</span>`} <span>(${esc(rol)})</span>${server ? ' <button type="button" class="link" id="uitloggen">Uitloggen</button>' : ''} <span class="hint" title="Versie van Kuparium">v${esc(VERSIE)}</span>`;
   document.getElementById('nav-gebruikers').hidden = !(server && app.gebruiker.rol === 'beheerder');
   document.getElementById('uitloggen')?.addEventListener('click', async () => {
     await app.opslag.uitloggen();

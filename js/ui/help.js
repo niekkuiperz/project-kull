@@ -27,7 +27,7 @@ export function toon(app, root) {
     </section>
     <section>
       <h2>Wijziging in de afspraken</h2>
-      <p>Bij een renteherziening, extra opname of nieuw schema: open de lening, kies <em>Afspraken bewerken</em> en voeg onder <em>Wijzigingen</em> een regel toe met de ingangsdatum. Het oude schema blijft tot die datum gelden.</p>
+      <p>Bij een renteherziening, extra opname, gedeeltelijke kwijtschelding of schenking, of nieuw schema: open de lening, kies <em>Afspraken bewerken</em> en voeg onder <em>Wijzigingen</em> een regel toe met de ingangsdatum. Het oude schema blijft tot die datum gelden.</p>
     </section>
     <section>
       <h2>Einde van het jaar</h2>

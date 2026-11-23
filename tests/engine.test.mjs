@@ -239,3 +239,156 @@ test('invoercontrole: dubbele invoer en splitsing', () => {
   assert.ok(fout.fouten.some((f) => f.includes('telt niet op')));
   assert.equal(stelLenerVoor('nl01test0123456789', data.leners).id, 'a');
 });
+
+// ---------------------------------------------------------------------------
+// Versie 1.1: W-001 (extra aflossing), W-002 (gedeeltelijke kwijtschelding),
+// W-005 (einddatum niet altijd verplicht).
+// ---------------------------------------------------------------------------
+// Fictieve aflossingsvrije lening: 48.000 tegen 2% = 80 rente per maand.
+const vrijeLening = {
+  ...basis, hoofdsom: 48000, rente: 2, aflossingsvorm: 'aflossingsvrij',
+  ingangsdatum: '2021-03-05', eerste_vervaldatum: '2021-04-12', einddatum: null,
+  beginstand: { datum: '2026-01-01', saldo: 48000 },
+};
+const renteOp = (r, d) => r.termijnen.find((t) => t.vervaldatum === d)?.rente;
+const maandRente = (tot, bedrag) => {
+  const regels = [];
+  for (let m = 1; m <= tot; m += 1) {
+    const d = `2026-${String(m).padStart(2, '0')}-12`;
+    regels.push({ ontvangst_id: `r${m}`, datum: d, bedrag });
+  }
+  return regels;
+};
+
+test('W-005: aflossingsvrij zonder einddatum geeft doorlopende rentetermijnen', () => {
+  const r = verwerkLening(vrijeLening, [], '2026-12-31');
+  assert.equal(r.signalen.filter((s) => s.ernst === 'fout').length, 0);
+  assert.equal(renteOp(r, '2026-01-12'), 8000);
+  assert.equal(renteOp(r, '2026-12-12'), 8000);
+  assert.equal(som(r.termijnen, 'aflossing'), 0);
+});
+
+test('W-005: annuïtair met vast bedrag zonder einddatum loopt tot de lening is afgelost', () => {
+  const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', termijnbedrag: 860.66, einddatum: null };
+  const r = verwerkLening(l, [], '2026-01-01');
+  assert.equal(r.termijnen.length, 12);
+  assert.equal(som(r.termijnen, 'aflossing'), 1000000);
+});
+
+test('W-005: lineair en annuïtair zonder vast bedrag blijven een einddatum vragen', () => {
+  for (const vorm of ['lineair', 'annuitair']) {
+    const r = verwerkLening({ ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: vorm, einddatum: null }, [], '2026-06-01');
+    assert.ok(r.signalen.some((s) => s.ernst === 'fout' && /Einddatum ontbreekt/.test(s.tekst)), vorm);
+  }
+});
+
+test('W-005: te laag vast termijnbedrag zonder einddatum geeft een waarschuwing, geen eindeloos schema', () => {
+  const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', termijnbedrag: 50, einddatum: null };
+  const r = verwerkLening(l, [], '2026-06-01');
+  assert.ok(r.signalen.some((s) => /niet hoger dan de rente/.test(s.tekst)));
+  assert.ok(r.termijnen.length < 12);
+});
+
+test('W-001: extra aflossing bij aflossingsvrij verlaagt de rente vanaf de volgende termijn', () => {
+  const regels = [
+    ...maandRente(5, 80),
+    { ontvangst_id: 'extra', datum: '2026-06-01', bedrag: 8000, rente: 0, aflossing: 8000 },
+    { ontvangst_id: 'r6', datum: '2026-06-12', bedrag: 80 },
+    { ontvangst_id: 'r7', datum: '2026-07-12', bedrag: 66.67 },
+  ];
+  const r = verwerkLening(vrijeLening, regels, '2026-12-31');
+  assert.equal(renteOp(r, '2026-05-12'), 8000);
+  assert.equal(renteOp(r, '2026-06-12'), 8000); // saldo aan het begin van de periode was 48.000
+  assert.equal(renteOp(r, '2026-07-12'), 6667);
+  assert.equal(renteOp(r, '2026-12-12'), 6667);
+  assert.equal(r.saldo, 4000000);
+  assert.ok(r.ontvangsten.every((o) => o.wijze !== 'te_beoordelen'), JSON.stringify(r.ontvangsten.filter((o) => o.wijze === 'te_beoordelen')));
+});
+
+test('W-001: extra aflossing op dezelfde dag als een wijziging telt mee in de herberekening', () => {
+  const l = { ...vrijeLening, wijzigingen: [{ id: 'w1', datum: '2026-06-01', rente: 2 }] };
+  const regels = [{ ontvangst_id: 'extra', datum: '2026-06-01', bedrag: 8000, rente: 0, aflossing: 8000 }];
+  const r = verwerkLening(l, regels, '2026-07-31');
+  // De wijziging start op 1-6 met het saldo na de aflossing; de eerste periode
+  // van een nieuwe afspraak telt als volle periode (bestaande regel).
+  assert.equal(renteOp(r, '2026-06-12'), 6667);
+  assert.equal(renteOp(r, '2026-07-12'), 6667);
+});
+
+test('W-001: extra aflossing bij annuïtair zonder vast bedrag verlaagt het termijnbedrag, einddatum blijft', () => {
+  const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', einddatum: '2027-01-01' };
+  const voor = verwerkLening(l, [], '2026-01-01');
+  const regels = [
+    { ontvangst_id: 't1', datum: '2026-02-01', bedrag: 860.66 },
+    { ontvangst_id: 'x', datum: '2026-02-15', bedrag: 2000, rente: 0, aflossing: 2000 },
+  ];
+  const r = verwerkLening(l, regels, '2026-03-31');
+  const laatste = r.termijnen[r.termijnen.length - 1];
+  assert.equal(laatste.vervaldatum, '2027-01-01');
+  assert.equal(renteOp(r, '2026-03-01'), Math.round((1000000 - voor.termijnen[0].aflossing) * 0.005)); // periode begon vóór de extra aflossing
+  const april = r.termijnen.find((t) => t.vervaldatum === '2026-04-01');
+  assert.ok(april.totaal < 86066 - 15000, `nieuw termijnbedrag ${april.totaal}`);
+  assert.equal(som(r.termijnen, 'aflossing') + 200000, 1000000);
+});
+
+test('W-001: extra aflossing bij annuïtair met vast bedrag verkort de looptijd', () => {
+  const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', termijnbedrag: 860.66, einddatum: '2027-01-01' };
+  const regels = [{ ontvangst_id: 'x', datum: '2026-01-15', bedrag: 2000, rente: 0, aflossing: 2000 }];
+  const r = verwerkLening(l, regels, '2026-02-28');
+  assert.ok(r.termijnen.length < 12);
+  assert.ok(r.termijnen.slice(1, -1).every((t) => t.totaal === 86066));
+  assert.equal(som(r.termijnen, 'aflossing') + 200000, 1000000);
+});
+
+test('W-001: extra aflossing bij lineair verlaagt de aflossing per termijn, einddatum blijft', () => {
+  const l = { ...basis, hoofdsom: 12000, rente: 0, aflossingsvorm: 'lineair', einddatum: '2027-01-01' };
+  const regels = [{ ontvangst_id: 'x', datum: '2026-01-15', bedrag: 1100, rente: 0, aflossing: 1100 }];
+  const r = verwerkLening(l, regels, '2026-02-28');
+  assert.equal(r.termijnen[0].aflossing, 100000); // termijn van 1-2: periode begon vóór de extra aflossing
+  assert.equal(r.termijnen[1].aflossing, 90000); // (12.000 - 1.000 - 1.100) / 11
+  assert.equal(r.termijnen[r.termijnen.length - 1].vervaldatum, '2027-01-01');
+  assert.equal(som(r.termijnen, 'aflossing') + 110000, 1200000);
+});
+
+test('W-002: gedeeltelijke kwijtschelding verlaagt saldo en rente en telt als kwijtgescholden', () => {
+  const l = { ...vrijeLening, wijzigingen: [{ id: 'w1', datum: '2026-06-01', kwijtschelding: 8000, toelichting: 'schenking' }] };
+  const r = verwerkLening(l, maandRente(5, 80), '2026-12-31');
+  const kw = r.mutaties.filter((m) => m.soort === 'kwijtschelding');
+  assert.deepEqual(kw.map((m) => [m.datum, m.centen]), [['2026-06-01', 800000]]);
+  assert.equal(r.saldo, 4000000);
+  assert.equal(renteOp(r, '2026-05-12'), 8000);
+  assert.equal(renteOp(r, '2026-06-12'), 6667);
+  assert.equal(r.mutaties.filter((m) => m.soort === 'aflossing').length, 0);
+});
+
+test('W-002: kwijtschelding in het jaaroverzicht als kwijtgescholden, niet als afgelost', () => {
+  const data = legeAdministratie();
+  data.leners.push({ id: 'a', naam: 'Lener A', tegenrekeningen: [] });
+  data.leningen.push({ ...vrijeLening, status: 'lopend', wijzigingen: [{ id: 'w1', datum: '2026-06-01', kwijtschelding: 8000 }] });
+  const v = verwerkAlles(data, '2026-12-31');
+  const jo = jaaroverzichtGeldgevers(data, v, 2026);
+  const rij = jo.flatMap((g) => g.rijen)[0];
+  assert.equal(rij.kwijtgescholden, 800000);
+  assert.equal(rij.afgelost, 0);
+  assert.equal(rij.eind, 4000000);
+  assert.ok(rij.klopt);
+});
+
+test('W-002: kwijtschelding hoger dan het saldo wordt begrensd en gemeld', () => {
+  const l = { ...basis, hoofdsom: 1000, rente: 0, aflossingsvorm: 'vrij', wijzigingen: [{ id: 'w1', datum: '2026-03-01', kwijtschelding: 1500 }] };
+  const r = verwerkLening(l, [], '2026-12-31');
+  assert.equal(r.saldo, 0);
+  assert.ok(r.signalen.some((s) => /hoger dan het saldo/.test(s.tekst)));
+});
+
+test('W-013: voorstel eerste vervaldatum aan het einde van de maand', async () => {
+  const { voorstelEersteVervaldatum, termijnDatum: td } = await import('../js/engine/datum.js');
+  assert.equal(voorstelEersteVervaldatum('2026-06-01', 'maand'), '2026-06-30');
+  assert.equal(voorstelEersteVervaldatum('2022-04-12', 'maand'), '2022-05-31');
+  assert.equal(voorstelEersteVervaldatum('2026-01-01', 'kwartaal'), '2026-03-31');
+  assert.equal(voorstelEersteVervaldatum('2026-01-01', 'jaar'), '2026-12-31');
+  assert.equal(voorstelEersteVervaldatum('2026-01-31', 'maand'), '2026-02-28');
+  assert.equal(voorstelEersteVervaldatum('2026-01-01', 'week'), null);
+  // De reeks blijft daarna op de laatste dag van de maand.
+  assert.deepEqual([1, 2, 3].map((k) => td('2026-06-30', 'maand', k)), ['2026-07-31', '2026-08-31', '2026-09-30']);
+});

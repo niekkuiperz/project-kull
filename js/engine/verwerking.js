@@ -44,6 +44,7 @@ export function maakSegmenten(lening) {
     start,
     beginbedrag: lening.beginstand ? naarCenten(lening.beginstand.saldo) : naarCenten(lening.hoofdsom),
     opname: 0,
+    kwijtschelding: 0,
     params: basis,
     wijziging: null,
     isBeginstand: Boolean(lening.beginstand),
@@ -73,6 +74,7 @@ export function maakSegmenten(lening) {
       start: w.datum,
       beginbedrag: null, // volgt uit het verloop van het vorige segment
       opname: naarCenten(w.extra_opname) || 0,
+      kwijtschelding: naarCenten(w.kwijtschelding) || 0,
       params,
       wijziging: w,
     });
@@ -100,6 +102,18 @@ function termijnDatums(params, start, grens, inclusief) {
   return datums;
 }
 
+// Zonder einddatum is een schema alleen te berekenen bij vrij aflossen,
+// aflossingsvrij (doorlopende rentetermijnen) en annuïtair met een vast
+// termijnbedrag (de looptijd volgt dan uit het bedrag). W-005.
+export function einddatumNodig(params) {
+  return params.aflossingsvorm === 'lineair'
+    || (params.aflossingsvorm === 'annuitair' && !params.termijnbedrag);
+}
+
+// Verste datum waarvoor termijnen worden gemaakt bij annuïtair met een vast
+// termijnbedrag en zonder einddatum.
+const VERSTE_DATUM = '2199-12-31';
+
 function nieuweTermijn(segment, vervaldatum, rente, aflossing) {
   return {
     segment, vervaldatum, rente, aflossing,
@@ -119,10 +133,11 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, handmatige
 
   if (P <= 0) return termijnen;
 
-  if (vorm !== 'vrij' && !params.einddatum) {
-    signalen.push({ soort: 'gegevens', ernst: 'fout', tekst: 'Einddatum ontbreekt; zonder einddatum is geen schema te berekenen.' });
+  if (einddatumNodig(params) && !params.einddatum) {
+    signalen.push({ soort: 'gegevens', ernst: 'fout', tekst: 'Einddatum ontbreekt; zonder einddatum is bij deze aflossingsvorm geen schema te berekenen.' });
     return termijnen;
   }
+  const open = !params.einddatum;
 
   if (params.einddatum && params.einddatum <= segment.start) {
     // Looptijd is al verstreken: het hele saldo is opeisbaar op de einddatum.
@@ -130,7 +145,10 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, handmatige
     return termijnen;
   }
 
-  const datums = termijnDatums(params, segment.start, grensVrij, segment.isBeginstand);
+  // Annuïtair met vast bedrag en zonder einddatum: termijnen tot de lening is
+  // afgelost. Kan het bedrag de rente niet dekken, dan alleen tot de grens.
+  const onbegrensd = open && vorm === 'annuitair' && params.termijnbedrag > Math.round(P * i);
+  const datums = termijnDatums(params, segment.start, onbegrensd ? VERSTE_DATUM : grensVrij, segment.isBeginstand);
   const n = datums.length;
   if (n === 0) return termijnen;
 
@@ -144,14 +162,17 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, handmatige
     for (let k = 0; k < n && B > 0; k += 1) {
       const rente = Math.round(B * i);
       let afl = betaling - rente;
-      if (afl < 0) {
+      if (afl <= 0 && (afl < 0 || open)) {
         afl = 0;
         if (!gemeld) {
-          signalen.push({ soort: 'gegevens', ernst: 'waarschuwing', tekst: 'Het vaste termijnbedrag is lager dan de rente; er wordt niets afgelost.' });
+          signalen.push({ soort: 'gegevens', ernst: 'waarschuwing', tekst: 'Het vaste termijnbedrag is niet hoger dan de rente; er wordt niets afgelost.' });
           gemeld = true;
         }
       }
-      if (k === n - 1 || afl > B) afl = B;
+      if ((!open && k === n - 1) || afl > B) afl = B;
+      // Zonder einddatum: een afrondingsrestje van hooguit een euro gaat mee
+      // in deze termijn in plaats van een extra termijn van een paar cent.
+      if (open && afl > 0 && B - afl <= 100) afl = B;
       termijnen.push(nieuweTermijn(segIndex, datums[k], rente, afl));
       B -= afl;
     }
@@ -167,7 +188,7 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, handmatige
   } else if (vorm === 'aflossingsvrij') {
     for (let k = 0; k < n; k += 1) {
       const rente = Math.round(P * i);
-      const laatste = k === n - 1;
+      const laatste = !open && k === n - 1;
       if (rente > 0 || laatste) termijnen.push(nieuweTermijn(segIndex, datums[k], rente, laatste ? P : 0));
     }
   } else if (vorm === 'vrij') {
@@ -299,6 +320,34 @@ function verwerkOntvangst(o, termijnen, betaalwijze) {
   return resultaat;
 }
 
+// W-001: na een extra aflossing wordt het schema opnieuw berekend over het
+// lagere saldo. De termijn waarin de extra aflossing valt, blijft zoals hij
+// was (rente over het saldo aan het begin van de periode, net als bij vrij
+// aflossen); vanaf de volgende termijn geldt het nieuwe saldo. Termijnen die
+// al (deels) betaald zijn, blijven staan.
+// - annuïtair zonder vast bedrag: nieuw termijnbedrag, zelfde einddatum;
+// - annuïtair met vast bedrag: zelfde bedrag, kortere looptijd;
+// - lineair: lagere aflossing per termijn, zelfde einddatum;
+// - aflossingsvrij: lagere rente.
+function herberekenNaExtra({ seg, segIndex, P, segTermijnen, extra, datum, volgende, grensVrij, signalen, termijnen }) {
+  const eerste = segTermijnen.find((t) => t.vervaldatum >= datum);
+  if (!eerste) return segTermijnen;
+  let vanaf = eerste.vervaldatum;
+  for (const t of segTermijnen) {
+    if (t.betalingen.length && t.vervaldatum > vanaf) vanaf = t.vervaldatum;
+  }
+  const behouden = segTermijnen.filter((t) => t.vervaldatum <= vanaf);
+  const weg = segTermijnen.filter((t) => t.vervaldatum > vanaf);
+  if (!weg.length) return segTermijnen;
+  for (const t of weg) termijnen.splice(termijnen.indexOf(t), 1);
+  const rest = P - behouden.reduce((s, t) => s + t.aflossing, 0) - extra;
+  const nieuw = rest > 0
+    ? genereerTermijnen({ ...seg, start: vanaf, isBeginstand: false }, segIndex, rest, volgende, grensVrij, [], signalen)
+    : [];
+  termijnen.push(...nieuw);
+  return [...behouden, ...nieuw];
+}
+
 // Saldo aan het einde van dag d (alle mutaties t/m d).
 export function saldoEindeDag(mutaties, d) {
   return mutaties.filter((m) => m.datum <= d).reduce((s, m) => s + teken(m) * m.centen, 0);
@@ -366,6 +415,7 @@ export function verwerkLening(lening, regels, peildatum) {
   const laatsteOntvangst = ontvangsten.length ? ontvangsten[ontvangsten.length - 1].datum : peildatum;
   const termijnen = [];
   let P = segmenten[0].beginbedrag;
+  let resterend = ontvangsten.slice(idx);
 
   for (let k = 0; k < segmenten.length; k += 1) {
     const seg = segmenten[k];
@@ -375,18 +425,30 @@ export function verwerkLening(lening, regels, peildatum) {
         mutaties.push({ datum: seg.start, soort: 'opname', centen: seg.opname });
         P += seg.opname;
       }
+      if (seg.kwijtschelding > 0) {
+        // Gedeeltelijke kwijtschelding of schenking (W-002): verlaagt het
+        // saldo, telt niet als ontvangen aflossing.
+        const x = Math.min(seg.kwijtschelding, Math.max(0, saldoEindeDag(mutaties, seg.start)));
+        if (x > 0) mutaties.push({ datum: seg.start, soort: 'kwijtschelding', centen: x });
+        if (x < seg.kwijtschelding) {
+          signalen.push({ soort: 'gegevens', ernst: 'waarschuwing', tekst: `De kwijtschelding van ${seg.start.split('-').reverse().join('-')} is hoger dan het saldo op die dag; alleen het saldo is kwijtgescholden.` });
+        }
+        P = Math.max(0, P - x);
+      }
     }
-    const venster = [];
-    while (idx < ontvangsten.length && (volgende === null || ontvangsten[idx].datum < volgende)) {
-      venster.push(ontvangsten[idx]);
-      idx += 1;
-    }
+    // Ontvangsten tot de volgende wijziging. Een extra aflossing op de dag van
+    // de wijziging zelf hoort er ook bij: die moet meetellen in het saldo
+    // waarover de nieuwe afspraak wordt berekend (W-001).
+    const hoortBij = (o) => volgende === null || o.datum < volgende
+      || (o.datum === volgende && o.aflossing_centen > 0);
+    const venster = resterend.filter(hoortBij);
+    resterend = resterend.filter((o) => !hoortBij(o));
     const handmatig = venster
       .filter((o) => o.aflossing_centen && o.aflossing_centen > 0)
       .map((o) => ({ datum: o.datum, centen: o.aflossing_centen }));
     const grensVrij = eenPeriodeNa(peildatum > laatsteOntvangst ? peildatum : laatsteOntvangst, seg.params.frequentie);
-    const nieuw = genereerTermijnen(seg, k, P, volgende, grensVrij, handmatig, signalen);
-    termijnen.push(...nieuw);
+    let segTermijnen = genereerTermijnen(seg, k, P, volgende, grensVrij, handmatig, signalen);
+    termijnen.push(...segTermijnen);
 
     let extra = 0;
     for (const o of venster) {
@@ -397,9 +459,14 @@ export function verwerkLening(lening, regels, peildatum) {
         if (res.rente > 0) mutaties.push({ datum: o.datum, soort: 'rente', centen: res.rente, ontvangst_id: o.ontvangst_id });
         if (res.aflossing > 0) mutaties.push({ datum: o.datum, soort: 'aflossing', centen: res.aflossing, ontvangst_id: o.ontvangst_id });
       }
+      if (res.extra_aflossing > 0 && seg.params.aflossingsvorm !== 'vrij') {
+        segTermijnen = herberekenNaExtra({
+          seg, segIndex: k, P, segTermijnen, extra, datum: o.datum, volgende, grensVrij, signalen, termijnen,
+        });
+      }
     }
     // Contractueel restant als vertrekpunt voor de volgende afspraak.
-    P = Math.max(0, P - nieuw.reduce((s, t) => s + t.aflossing, 0) - extra);
+    P = Math.max(0, P - segTermijnen.reduce((s, t) => s + t.aflossing, 0) - extra);
   }
 
   if (lening.kwijtschelding_datum) {
@@ -418,6 +485,7 @@ export function verwerkLening(lening, regels, peildatum) {
     if (lopend > 0) nulDatum = null;
   }
 
+  termijnen.sort((a, b) => a.vervaldatum.localeCompare(b.vervaldatum) || a.segment - b.segment);
   termijnen.forEach((t, n) => {
     t.nr = n + 1;
     t.totaal = t.rente + t.aflossing;
@@ -429,7 +497,8 @@ export function verwerkLening(lening, regels, peildatum) {
   });
 
   const saldo = saldoEindeDag(mutaties, peildatum);
-  return { lening, termijnen, ontvangsten: verwerkt, mutaties, saldo, nulDatum, signalen };
+  const uniek = signalen.filter((x, n) => signalen.findIndex((y) => y.tekst === x.tekst) === n);
+  return { lening, termijnen, ontvangsten: verwerkt, mutaties, saldo, nulDatum, signalen: uniek };
 }
 
 function termijnStatus(t, peildatum, nulDatum) {

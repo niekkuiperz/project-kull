@@ -1,7 +1,7 @@
 // Verwerkt de hele administratie: alle leningen, signaleringen ("aandacht
 // nodig"), saldi en jaaroverzichten. Pure functies zonder opslag of scherm.
 
-import { verwerkLening, saldoBeginDag, saldoEindeDag, AFLOSSINGSVORMEN, FREQUENTIES } from './verwerking.js';
+import { verwerkLening, saldoBeginDag, saldoEindeDag, AFLOSSINGSVORMEN, FREQUENTIES, einddatumNodig } from './verwerking.js';
 import { plusDagen, isGeldig, formatDatum } from './datum.js';
 import { naarCenten, formatEuro } from './geld.js';
 
@@ -210,7 +210,14 @@ export function controleerLening(l, data) {
   if (l.einddatum && isGeldig(l.ingangsdatum) && l.einddatum <= l.ingangsdatum) fouten.push('Einddatum moet na de ingangsdatum liggen.');
   if (!AFLOSSINGSVORMEN.includes(l.aflossingsvorm)) fouten.push('Kies een aflossingsvorm.');
   if (!FREQUENTIES.includes(l.frequentie)) fouten.push('Kies een termijnfrequentie.');
-  if (l.aflossingsvorm !== 'vrij' && !l.einddatum) fouten.push('Einddatum is verplicht, behalve bij vrij aflossen.');
+  if (!l.einddatum && einddatumNodig({ aflossingsvorm: l.aflossingsvorm, termijnbedrag: naarCenten(l.termijnbedrag) })) {
+    fouten.push('Einddatum is verplicht bij lineair en bij annuïtair zonder vast termijnbedrag.');
+  }
+  for (const w of l.wijzigingen || []) {
+    if (w.kwijtschelding !== undefined && w.kwijtschelding !== null && !(Number(w.kwijtschelding) > 0)) {
+      fouten.push('Een kwijtschelding of schenking moet groter zijn dan nul.');
+    }
+  }
   const rente = Number(l.rente);
   if (!Number.isFinite(rente) || rente < 0 || rente > 25) fouten.push('Rente moet tussen 0 en 25 procent liggen.');
   if (l.eerste_vervaldatum && !isGeldig(l.eerste_vervaldatum)) fouten.push('Eerste vervaldatum is ongeldig.');

@@ -97,13 +97,15 @@ Het bestand `.gitignore` houdt deze bestanden buiten git, maar **niet** bij uplo
 Deze regels bepalen de uitkomsten. Controleer ze tegen de contracten.
 
 - **Rente per termijn** = jaarrente gedeeld door het aantal termijnen per jaar (52, 12, 4 of 1), over het saldo aan het begin van de periode. De eerste periode telt altijd als volle periode, ook als de lening halverwege een maand ingaat.
-- **Annuïtair:** vast termijnbedrag, berekend uit hoofdsom, rente en aantal termijnen. Noemt het contract een vast bedrag, vul dat dan in; dat gaat voor.
-- **Lineair:** elke termijn hetzelfde aflossingsbedrag, rente over het dalende saldo.
-- **Aflossingsvrij:** alleen rente; de hele hoofdsom op de einddatum.
+- **Annuïtair:** vast termijnbedrag, berekend uit hoofdsom, rente en aantal termijnen. Noemt het contract een vast bedrag, vul dat dan in; dat gaat voor. Met een vast bedrag is de einddatum niet nodig: de looptijd volgt dan uit het bedrag. Een afrondingsrestje van hooguit een euro gaat mee in de laatste termijn.
+- **Lineair:** elke termijn hetzelfde aflossingsbedrag, rente over het dalende saldo. Einddatum verplicht.
+- **Aflossingsvrij:** alleen rente. Met een einddatum is de hele hoofdsom dan opeisbaar; zonder einddatum lopen de rentetermijnen door.
 - **Vrij aflossen:** rente over het werkelijke saldo; aflossen mag altijd. Een aflossing verdeel je bij invoer zelf ("zelf verdelen").
+- **Vervaldatum:** zonder ingevulde eerste vervaldatum valt de eerste termijn één periode na de ingangsdatum. Bij een nieuwe lening stelt het formulier het einde van de maand voor (start 1-6 per maand: 30-6). Een eerste vervaldatum op de laatste dag van een maand houdt de reeks op de laatste dag (31-1, 28-2, 31-3).
 - **Automatisch verdelen (F-12):** een ontvangst die precies gelijk is aan de open termijn, of aan een paar oudste open termijnen samen, wordt volgens het schema verdeeld over rente en aflossing. Een ontvangst tot 45 dagen vóór de vervaldatum hoort bij die termijn.
 - **Afwijkend bedrag:** wordt niet automatisch verdeeld maar komt bij *te beoordelen*. Pas na handmatige verdeling telt het mee.
-- **Extra aflossing:** aflossing boven het schema verlaagt het saldo. Het schema van de volgende termijnen blijft gelijk; leg zo nodig een wijziging vast.
+- **Extra aflossing (F-23):** aflossing boven het schema verlaagt het saldo, en het schema wordt opnieuw berekend over het lagere saldo. De termijn waarin de extra aflossing valt, blijft gelijk (rente over het saldo aan het begin van de periode); vanaf de volgende termijn geldt het nieuwe saldo. Annuïtair zonder vast bedrag: lager termijnbedrag, zelfde einddatum. Annuïtair met vast bedrag: zelfde bedrag, kortere looptijd. Lineair: lagere aflossing per termijn, zelfde einddatum. Aflossingsvrij: lagere rente. Valt een extra aflossing op de ingangsdatum van een wijziging, dan telt hij mee in het saldo waarover de nieuwe afspraak wordt berekend.
+- **Gedeeltelijke kwijtschelding of schenking (F-24):** leg je vast als wijziging met een bedrag. Het saldo daalt op de ingangsdatum, het schema wordt vanaf dan opnieuw berekend (zoals bij elke wijziging telt de eerste periode als volle periode), en het bedrag staat in het jaaroverzicht als kwijtgescholden, niet als afgelost. Volledige kwijtschelding van het restant blijft via de status "Kwijtgescholden".
 - **Achterstand (F-15):** een termijn die een maand na de vervaldatum niet volledig is ontvangen.
 - **Beginstand:** een lening die al liep, start met het saldo op de beginstanddatum. Een termijn die op die datum vervalt, valt erna (het saldo geldt per het begin van de dag). Ontvangsten van vóór de beginstand tellen niet mee.
 - **Wijziging (F-04):** vanaf de ingangsdatum wordt het schema opnieuw berekend over het contractuele restant, met de nieuwe voorwaarden. Een extra opname verhoogt het saldo.
@@ -152,7 +154,15 @@ node --test tests/engine.test.mjs                                   # rekenkern
 KULL_CONFIG=/tmp/test-config.php php -S 127.0.0.1:8790 -t .        # app en API lokaal
 python3 tests/api_test.py http://127.0.0.1:8790/api/index.php       # API-test (lege testdatabase)
 python3 tests/aanval_test.py 127.0.0.1:8790 <ip>:8790 <sqlite-bestand>  # aanvalstests (lege testdatabase)
+php -S 127.0.0.1:8795 -t . & node tests/ui_rooktest.mjs http://127.0.0.1:8795/  # schermen in de proefmodus (vereist google-chrome)
 ```
+
+## Versies
+
+Het versienummer staat in `js/versie.js` en rechtsboven in de app. Per versie: wensen kiezen uit de wensenlijst, lokaal bouwen en alle tests draaien, testen in de proefmodus, en pas na akkoord naar GitHub en de server. Vlak voor het uitrollen een database-export in Plesk en een back-upbestand uit de app.
+
+- **1.1.0** Extra aflossing verlaagt de rente bij elke aflossingsvorm (F-23). Gedeeltelijke kwijtschelding of schenking (F-24). Einddatum niet nodig bij aflossingsvrij en bij annuïtair met vast termijnbedrag. Knoppen "testgegevens laden" en "alles leegmaken" alleen nog in de proefmodus. Per ontvangst zichtbaar wie hem invoerde en wijzigde, met een knop "Wijzigen". Laatste-beheerderregel in één schrijfslot. Bij een nieuwe lening wordt de eerste vervaldatum voorgesteld als einde van de maand. Versienummer in de app.
+- **1.0.0** Eerste versie op kuparium.nl.
 
 Mappen:
 

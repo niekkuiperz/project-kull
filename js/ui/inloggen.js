@@ -36,7 +36,7 @@ const WACHTWOORD_HINT = `<span class="hint">Minstens ${MIN} tekens. Een zin van 
 
 async function installeren(opslag, root) {
   const form = scherm(root, 'Installatie', `
-    <p>Er is nog geen beheerder. Maak het eerste account aan met de installatiecode uit <code>api/config.php</code>.</p>
+    <p>Er is nog geen beheerder. Maak het eerste account aan met de installatiecode uit het configuratiebestand op de server.</p>
     <form class="formulier">
       <label>Installatiecode<input name="code" required autocomplete="off"></label>
       <label>Je naam<input name="naam" required autocomplete="name"></label>

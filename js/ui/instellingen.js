@@ -38,7 +38,7 @@ export function toon(app, root) {
       <div id="historie"><p class="leeg">Laden...</p></div>
     </section>
 
-    ${bewerk ? `<section>
+    ${bewerk && lokaal ? `<section>
       <h2>Testen</h2>
       <p>Laad een set verzonnen leningen en ontvangsten om de berekeningen en meldingen te bekijken. Dit vervangt alle huidige gegevens.</p>
       <div class="knoppen">

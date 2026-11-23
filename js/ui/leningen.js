@@ -1,7 +1,8 @@
 import { esc, euro, datum, opties, nieuwId, formData, meldingen, TEKST, lijstOpties, leesGetal } from './hulp.js';
 import { controleerLening } from '../engine/administratie.js';
 import { verwerkLening } from '../engine/verwerking.js';
-import { isGeldig } from '../engine/datum.js';
+import { isGeldig, voorstelEersteVervaldatum } from '../engine/datum.js';
+import { formatEuro, naarCenten } from '../engine/geld.js';
 
 export function toon(app, root, params, route) {
   if (route.bewerk) return toonFormulier(app, root, params[0]);
@@ -113,8 +114,10 @@ export function beschrijfWijziging(w) {
   if (w.aflossingsvorm) delen.push(TEKST.aflossingsvorm[w.aflossingsvorm].toLowerCase());
   if (w.frequentie) delen.push(TEKST.frequentie[w.frequentie].toLowerCase());
   if (w.einddatum) delen.push(`einddatum ${w.einddatum.split('-').reverse().join('-')}`);
-  if (w.termijnbedrag) delen.push(`termijnbedrag € ${String(w.termijnbedrag).replace('.', ',')}`);
-  if (w.extra_opname) delen.push(`extra opname € ${String(w.extra_opname).replace('.', ',')}`);
+  const bedrag = (x) => formatEuro(naarCenten(x));
+  if (w.termijnbedrag) delen.push(`termijnbedrag ${bedrag(w.termijnbedrag)}`);
+  if (w.extra_opname) delen.push(`extra opname ${bedrag(w.extra_opname)}`);
+  if (w.kwijtschelding) delen.push(`kwijtschelding of schenking ${bedrag(w.kwijtschelding)}`);
   return delen.join(', ') || 'herberekening';
 }
 
@@ -150,7 +153,7 @@ function toonFormulier(app, root, id) {
         <div class="rij3">
           <label>Hoofdsom (€)<input name="hoofdsom" inputmode="decimal" value="${getal(l.hoofdsom)}" required></label>
           <label>Ingangsdatum<input name="ingangsdatum" type="date" value="${v(l.ingangsdatum)}" required></label>
-          <label>Einddatum<input name="einddatum" type="date" value="${v(l.einddatum)}"><span class="hint">Niet nodig bij vrij aflossen.</span></label>
+          <label>Einddatum<input name="einddatum" type="date" value="${v(l.einddatum)}"><span class="hint">Niet nodig bij vrij aflossen, aflossingsvrij en annuïtair met een vast termijnbedrag.</span></label>
         </div>
         <div class="rij3">
           <label>Rente per jaar (%)<input name="rente" inputmode="decimal" value="${getal(l.rente)}"></label>
@@ -163,7 +166,7 @@ function toonFormulier(app, root, id) {
           <label>Betaling<select name="betaalwijze">${opties(lijstOpties(TEKST.betaalwijze), l.betaalwijze)}</select></label>
         </div>
         <div class="rij3">
-          <label>Eerste vervaldatum<input name="eerste_vervaldatum" type="date" value="${v(l.eerste_vervaldatum)}"><span class="hint">Leeg: één termijn na de ingangsdatum.</span></label>
+          <label>Eerste vervaldatum<input name="eerste_vervaldatum" type="date" value="${v(l.eerste_vervaldatum)}"><span class="hint">${nieuw ? 'Wordt voorgesteld als einde van de maand; pas aan als het contract iets anders zegt.' : 'Leeg: één termijn na de ingangsdatum.'}</span></label>
           <label>Vast termijnbedrag (€)<input name="termijnbedrag" inputmode="decimal" value="${getal(l.termijnbedrag)}"><span class="hint">Alleen bij annuïtair als het contract een vast bedrag noemt. Leeg: berekend.</span></label>
           <span></span>
         </div>
@@ -207,6 +210,10 @@ function toonFormulier(app, root, id) {
             <label>Nieuw vast termijnbedrag (€)<input data-w="termijnbedrag" inputmode="decimal"></label>
             <label>Extra opname (€)<input data-w="extra_opname" inputmode="decimal"></label>
           </div>
+          <div class="rij3">
+            <label>Kwijtschelding of schenking (€)<input data-w="kwijtschelding" inputmode="decimal"><span class="hint">Verlaagt het saldo zonder dat er geld binnenkomt. Telt in het jaaroverzicht als kwijtgescholden.</span></label>
+            <span></span><span></span>
+          </div>
           <label>Toelichting<input data-w="toelichting"></label>
           <button type="button" class="knop secundair" id="wijziging-toevoegen">Toevoegen</button>
         </details>`}
@@ -223,7 +230,19 @@ function toonFormulier(app, root, id) {
   const form = root.querySelector('#lening-form');
   const melding = root.querySelector('#meldingen');
 
+  // W-013: bij een nieuwe lening de eerste vervaldatum voorstellen als einde
+  // van de maand, zolang de gebruiker hem niet zelf heeft aangepast.
+  let voorgesteld = '';
+  const stelVervaldatumVoor = () => {
+    if (!nieuw) return;
+    const veld = form.eerste_vervaldatum;
+    if (veld.value && veld.value !== voorgesteld) return;
+    const voorstel = voorstelEersteVervaldatum(form.ingangsdatum.value, form.frequentie.value) || '';
+    veld.value = voorstel;
+    voorgesteld = voorstel;
+  };
   form.addEventListener('change', (e) => {
+    if (e.target.name === 'ingangsdatum' || e.target.name === 'frequentie') stelVervaldatumVoor();
     if (e.target.name === 'heeft_beginstand') form.querySelector('.beginstand').hidden = !e.target.checked;
     if (e.target.name === 'status') form.querySelector('.kwijt').hidden = e.target.value !== 'kwijtgescholden';
   });
@@ -240,7 +259,7 @@ function toonFormulier(app, root, id) {
     const w = { id: nieuwId('wijz'), datum: veld('datum').value };
     const fouten = [];
     if (!isGeldig(w.datum)) fouten.push('Vul een geldige ingangsdatum voor de wijziging in.');
-    for (const n of ['rente', 'termijnbedrag', 'extra_opname']) {
+    for (const n of ['rente', 'termijnbedrag', 'extra_opname', 'kwijtschelding']) {
       const x = leesGetal(veld(n).value, { duizendtallen: n !== 'rente' });
       if (Number.isNaN(x)) fouten.push(`Ongeldig getal bij ${n.replace('_', ' ')}.`);
       else if (x !== null) w[n] = x;

@@ -310,17 +310,27 @@ switch ($actie) {
         if ((int)$doel['id'] === (int)$beheerder['id'] && ($rol !== 'beheerder' || !$actief)) {
             throw new ApiFout('Je kunt je eigen rol niet verlagen en jezelf niet blokkeren.');
         }
-        if ($doel['rol'] === 'beheerder' && ($rol !== 'beheerder' || !$actief)) {
-            $overig = (int)eenRij("SELECT COUNT(*) AS n FROM kull_gebruikers WHERE rol = 'beheerder' AND actief = 1 AND id <> ?", [$doel['id']])['n'];
-            if ($overig === 0) {
-                throw new ApiFout('Er moet minstens één actieve beheerder overblijven.');
+        // W-008: controle en wijziging in één schrijfslot, zodat twee
+        // beheerders die elkaar tegelijk verlagen niet samen op nul uitkomen.
+        startSchrijven();
+        try {
+            $huidig = eenRij('SELECT * FROM kull_gebruikers WHERE id = ?', [$doel['id']]);
+            if ($huidig['rol'] === 'beheerder' && ($rol !== 'beheerder' || !$actief)) {
+                $overig = (int)eenRij("SELECT COUNT(*) AS n FROM kull_gebruikers WHERE rol = 'beheerder' AND actief = 1 AND id <> ?", [$doel['id']])['n'];
+                if ($overig === 0) {
+                    throw new ApiFout('Er moet minstens één actieve beheerder overblijven.');
+                }
             }
+            $versie = (int)$huidig['sessie_versie'] + (($rol !== $huidig['rol'] || $actief !== (bool)$huidig['actief']) ? 1 : 0);
+            voerUit(
+                'UPDATE kull_gebruikers SET naam = ?, rol = ?, actief = ?, sessie_versie = ? WHERE id = ?',
+                [$gebruikersnaam, $rol, $actief ? 1 : 0, $versie, $doel['id']]
+            );
+            stopSchrijven(true);
+        } catch (Throwable $e) {
+            stopSchrijven(false);
+            throw $e;
         }
-        $versie = (int)$doel['sessie_versie'] + (($rol !== $doel['rol'] || $actief !== (bool)$doel['actief']) ? 1 : 0);
-        voerUit(
-            'UPDATE kull_gebruikers SET naam = ?, rol = ?, actief = ?, sessie_versie = ? WHERE id = ?',
-            [$gebruikersnaam, $rol, $actief ? 1 : 0, $versie, $doel['id']]
-        );
         logGebeurtenis((int)$beheerder['id'], 'gebruiker_gewijzigd', "Gebruiker {$doel['email']}: rol $rol, " . ($actief ? 'actief' : 'geblokkeerd'));
         antwoord(['ok' => true]);
 

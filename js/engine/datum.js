@@ -43,8 +43,10 @@ export function plusMaanden(iso, n, ankerDag) {
 export const PERIODES_PER_JAAR = { week: 52, maand: 12, kwartaal: 4, jaar: 1 };
 
 // De k-de termijndatum vanaf een anker (k = 0 geeft het anker zelf).
+// Valt het anker op de laatste dag van een maand (30 april, 28 februari), dan
+// blijft de reeks op de laatste dag van de maand (31 mei, 30 juni, ...). W-013.
 export function termijnDatum(anker, frequentie, k) {
-  const ankerDag = Number(anker.slice(8, 10));
+  const ankerDag = anker === eindeMaand(anker) ? 31 : Number(anker.slice(8, 10));
   switch (frequentie) {
     case 'week': return plusDagen(anker, 7 * k);
     case 'maand': return plusMaanden(anker, k, ankerDag);
@@ -69,4 +71,19 @@ export function formatDatum(iso) {
   if (!iso) return '';
   const [j, m, d] = iso.split('-');
   return `${d}-${m}-${j}`;
+}
+
+// Laatste dag van de maand waarin iso valt.
+export function eindeMaand(iso) {
+  return plusDagen(plusMaanden(`${iso.slice(0, 7)}-01`, 1), -1);
+}
+
+// W-013: voorstel voor de eerste vervaldatum. Rente wordt in de regel aan het
+// einde van de maand betaald: de eerste termijn valt op het einde van de maand
+// waarin de eerste volle periode eindigt (start 1-6, per maand: 30-6; start
+// 12-4, per maand: 31-5; start 1-1, per kwartaal: 31-3). Bij weektermijnen
+// geen voorstel.
+export function voorstelEersteVervaldatum(ingangsdatum, frequentie) {
+  if (!isGeldig(ingangsdatum) || !['maand', 'kwartaal', 'jaar'].includes(frequentie)) return null;
+  return eindeMaand(plusDagen(eenPeriodeNa(ingangsdatum, frequentie), -1));
 }
