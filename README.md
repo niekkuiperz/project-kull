@@ -161,6 +161,7 @@ php -S 127.0.0.1:8795 -t . & node tests/ui_rooktest.mjs http://127.0.0.1:8795/  
 
 Het versienummer staat in `js/versie.js` en rechtsboven in de app. Per versie: wensen kiezen uit de wensenlijst, lokaal bouwen en alle tests draaien, testen in de proefmodus, en pas na akkoord naar GitHub en de server. Vlak voor het uitrollen een database-export in Plesk en een back-upbestand uit de app.
 
+- **1.1.2** Browsers laden na een nieuwe versie meteen de nieuwe bestanden: de server zegt nu bij HTML, JavaScript en CSS dat de browser elke keer moet nagaan of er een nieuwere versie is (voorheen mocht de browser ze 7 dagen bewaren).
 - **1.1.1** "Vrij aflossen" vervalt als aparte aflossingsvorm; het is opgegaan in aflossingsvrij (einddatum niet verplicht). Bestaande leningen met vrij aflossen worden automatisch aflossingsvrij.
 - **1.1.0** Extra aflossing verlaagt de rente bij elke aflossingsvorm (F-23). Gedeeltelijke kwijtschelding of schenking (F-24). Einddatum niet nodig bij aflossingsvrij en bij annuïtair met vast termijnbedrag. Knoppen "testgegevens laden" en "alles leegmaken" alleen nog in de proefmodus. Per ontvangst zichtbaar wie hem invoerde en wijzigde, met een knop "Wijzigen". Laatste-beheerderregel in één schrijfslot. Bij een nieuwe lening wordt de eerste vervaldatum voorgesteld als einde van de maand. Versienummer in de app.
 - **1.0.0** Eerste versie op kuparium.nl.

@@ -102,7 +102,7 @@ const controles = [];
 const check = (naam, ok) => { controles.push([naam, ok]); console.log(`${ok ? 'OK  ' : 'FOUT'} ${naam}`); };
 
 const kop = await js('document.getElementById("gebruiker").innerText');
-check('versienummer zichtbaar', /v1\.1\.1/.test(kop));
+check('versienummer zichtbaar', /v1\.1\.2/.test(kop));
 
 let t = await ga('#/');
 check('overzicht laadt', /Overzicht/.test(t));

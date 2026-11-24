@@ -1,2 +1,2 @@
 // Versienummer van Kuparium. Ophogen bij elke uitrol (zie README, "Versies").
-export const VERSIE = '1.1.1';
+export const VERSIE = '1.1.2';

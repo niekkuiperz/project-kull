@@ -21,6 +21,21 @@ RedirectMatch 404 /tests(/|$)
     Header always set X-Robots-Tag "noindex, nofollow, noarchive, nosnippet"
 </IfModule>
 
+# Altijd de nieuwste versie van de app laden. De hoster laat browsers
+# JavaScript en CSS standaard 7 dagen bewaren zonder opnieuw te vragen; na een
+# nieuwe versie draaide de browser dan nog dagen de oude code, soms half oud en
+# half nieuw. Met no-cache vraagt de browser bij elk bezoek of het bestand
+# veranderd is; is het hetzelfde, dan komt er alleen een kort antwoord terug.
+<IfModule mod_expires.c>
+    ExpiresActive Off
+</IfModule>
+<FilesMatch "\.(html|js|css)$">
+    <IfModule mod_headers.c>
+        Header unset Expires
+        Header set Cache-Control "no-cache"
+    </IfModule>
+</FilesMatch>
+
 # Zet HTTPS afdwingen bij voorkeur aan in het controlepaneel van de hoster.
 # Kan dat daar niet, haal dan het hekje weg voor de drie regels hieronder.
 # RewriteEngine On
