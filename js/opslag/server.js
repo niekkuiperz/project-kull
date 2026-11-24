@@ -96,4 +96,9 @@ export class ServerOpslag {
   wijzigGebruiker(gegevens) { return this.verzoek('gebruiker_wijzigen', { methode: 'POST', gegevens }); }
   herstelGebruiker(gegevens) { return this.verzoek('gebruiker_herstel', { methode: 'POST', gegevens }); }
   async gebeurtenissen() { return (await this.verzoek('gebeurtenissen')).gebeurtenissen; }
+
+  // ---- Wensen (W-006) --------------------------------------------------------
+  dienWensIn(tekst) { return this.verzoek('wens_indienen', { methode: 'POST', gegevens: { tekst } }); }
+  async wensen() { return (await this.verzoek('wensen')).wensen; }
+  zetWensStatus(id, status) { return this.verzoek('wens_status', { methode: 'POST', gegevens: { id, status } }); }
 }

@@ -397,3 +397,35 @@ test('W-013: voorstel eerste vervaldatum aan het einde van de maand', async () =
   // De reeks blijft daarna op de laatste dag van de maand.
   assert.deepEqual([1, 2, 3].map((k) => td('2026-06-30', 'maand', k)), ['2026-07-31', '2026-08-31', '2026-09-30']);
 });
+
+// ---------------------------------------------------------------------------
+// Versie 1.2.0
+// ---------------------------------------------------------------------------
+test('W-015: datums buiten 2000 tot en met 2200 worden geweigerd', async () => {
+  const { controleerLening, controleerOntvangst, legeAdministratie } = await import('../js/engine/administratie.js');
+  const data = { ...legeAdministratie(), leners: [{ id: 'a', naam: 'Proef A (fictief)', tegenrekeningen: [] }] };
+  const goed = { ...basis, hoofdsom: 1000, rente: 2, aflossingsvorm: 'aflossingsvrij', einddatum: null };
+  assert.deepEqual(controleerLening(goed, data), []);
+  const fout = (x) => controleerLening({ ...goed, ...x }, data).join(' ');
+  assert.match(fout({ ingangsdatum: '1999-12-31' }), /Ingangsdatum: het jaartal moet tussen 2000 en 2200/);
+  assert.match(fout({ einddatum: '2201-01-01' }), /Einddatum: het jaartal/);
+  assert.match(fout({ eerste_vervaldatum: '1990-01-31' }), /Eerste vervaldatum: het jaartal/);
+  assert.match(fout({ beginstand: { datum: '1995-01-01', saldo: 1000 } }), /Datum beginstand: het jaartal/);
+  assert.match(fout({ wijzigingen: [{ id: 'w', datum: '2300-01-01', rente: 1 }] }), /Ingangsdatum van een wijziging: het jaartal/);
+  assert.equal(fout({ einddatum: '2200-12-31' }), '');
+  assert.equal(fout({ ingangsdatum: '2000-01-01' }), '');
+  const lening = { ...goed, id: 'l1' };
+  const d2 = { ...data, leningen: [lening] };
+  const o = { id: 'o', datum: '1999-06-01', bedrag: 10, lener_id: 'a', regels: [{ lening_id: 'l1', bedrag: 10 }] };
+  assert.match(controleerOntvangst(o, d2, '2026-11-25').fouten.join(' '), /Datum: het jaartal/);
+});
+
+test('W-018: een lening heeft precies één bestaande lener', async () => {
+  const { controleerLening, legeAdministratie } = await import('../js/engine/administratie.js');
+  const data = { ...legeAdministratie(), leners: [{ id: 'a', naam: 'Proef A' }, { id: 'b', naam: 'Proef B' }] };
+  const l = { ...basis, hoofdsom: 1000, rente: 2, aflossingsvorm: 'aflossingsvrij', einddatum: null };
+  assert.deepEqual(controleerLening({ ...l, lener_ids: ['a'] }, data), []);
+  assert.match(controleerLening({ ...l, lener_ids: [] }, data).join(' '), /Kies een lener/);
+  assert.match(controleerLening({ ...l, lener_ids: ['a', 'b'] }, data).join(' '), /precies één lener/);
+  assert.match(controleerLening({ ...l, lener_ids: ['x'] }, data).join(' '), /bestaat niet/);
+});

@@ -186,3 +186,12 @@ body.alleen-lezen .knop.gevaar { display: none; }
   .tegel { border: 1px solid #999; }
   section.pagina + section.pagina { break-before: page; }
 }
+
+/* W-006: wensen */
+.teller { display: inline-block; min-width: 1.3em; padding: 0 0.35em; margin-left: 0.25em; border-radius: 0.7em; background: #c0392b; color: #fff; font-size: 0.8rem; font-weight: 700; text-align: center; line-height: 1.3em; }
+.tabel tr.nadruk td { background: #fff8e1; }
+.wenstekst { white-space: pre-wrap; max-width: 40rem; }
+.hulp-knop { display: inline-flex; align-items: center; justify-content: center; width: 1.4rem; height: 1.4rem; margin-left: 0.4rem; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); font-size: 0.9rem; font-weight: 700; text-decoration: none; vertical-align: middle; }
+.hulp-knop:hover { background: var(--accent); color: #fff; }
+.inhoudsopgave { line-height: 1.8; }
+.hulp-scherm { margin-bottom: 1.2rem; }

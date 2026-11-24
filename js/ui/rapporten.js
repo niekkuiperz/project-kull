@@ -61,7 +61,7 @@ function toonGeldgevers(app, doel, jaar, root) {
     ${overzicht.map((g) => `<section class="pagina">
       <h3>${esc(g.geldgever.naam)}</h3>
       ${g.rijen.length ? `<table class="tabel compact">
-        <thead><tr><th>Lening</th><th>Lener(s)</th><th class="getal">Saldo 1 jan</th><th class="getal">Nieuw verstrekt</th><th class="getal">Afgelost</th><th class="getal">Kwijtgescholden</th><th class="getal">Rente ontvangen</th><th class="getal">Saldo 31 dec</th></tr></thead>
+        <thead><tr><th>Lening</th><th>Lener</th><th class="getal">Saldo 1 jan</th><th class="getal">Nieuw verstrekt</th><th class="getal">Afgelost</th><th class="getal">Kwijtgescholden</th><th class="getal">Rente ontvangen</th><th class="getal">Saldo 31 dec</th></tr></thead>
         <tbody>${g.rijen.map((r) => `<tr>
           <td>${esc(r.lening.nummer)}</td>
           <td>${esc(r.leners)}${r.opmerking ? `<br><span class="klein">${esc(r.opmerking)}</span>` : ''}</td>
@@ -79,7 +79,7 @@ function toonGeldgevers(app, doel, jaar, root) {
     const csv = naarCsv([
       { titel: 'Geldgever', waarde: (r) => r.geldgever },
       { titel: 'Lening', waarde: (r) => r.lening.nummer },
-      { titel: 'Lener(s)', waarde: (r) => r.leners },
+      { titel: 'Lener', waarde: (r) => r.leners },
       { titel: 'Saldo 1 januari', waarde: (r) => bedragCsv(r.begin) },
       { titel: 'Nieuw verstrekt', waarde: (r) => bedragCsv(r.nieuw) },
       { titel: 'Afgelost', waarde: (r) => bedragCsv(r.afgelost) },

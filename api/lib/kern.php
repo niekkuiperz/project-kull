@@ -151,7 +151,21 @@ function maakTabellen(PDO $pdo): void
         omschrijving $tekst NOT NULL,
         ip $tekst NULL
     )$eind");
+    // W-006: wensen van gebruikers. Los van de administratie, zodat ook wie
+    // alleen mag lezen een wens kan indienen; alleen beheerders zien ze.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS kull_wensen (
+        id $id,
+        tijd BIGINT NOT NULL,
+        gebruiker_id BIGINT NULL,
+        naam $tekst NOT NULL,
+        tekst $groot NOT NULL,
+        status $tekst NOT NULL DEFAULT 'nieuw',
+        gewijzigd_op BIGINT NULL
+    )$eind");
 }
+
+const WENS_STATUSSEN = ['nieuw', 'gezien', 'afgehandeld'];
+const MAX_WENSEN_PER_DAG = 10;
 
 // Schrijftransactie die meteen een slot neemt, zodat twee gelijktijdige
 // verzoeken elkaar niet kunnen inhalen.

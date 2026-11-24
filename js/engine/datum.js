@@ -19,6 +19,14 @@ export function isGeldig(iso) {
   return vanUTC(naarUTC(iso)) === iso;
 }
 
+// W-015: alleen reële datums. Een datumveld in de browser accepteert ook een
+// jaartal van zes cijfers; dat is altijd een tikfout.
+export const MIN_DATUM = '2000-01-01';
+export const MAX_DATUM = '2200-12-31';
+export function binnenBereik(iso) {
+  return isGeldig(iso) && iso >= MIN_DATUM && iso <= MAX_DATUM;
+}
+
 export function plusDagen(iso, n) {
   return vanUTC(naarUTC(iso) + n * 86400000);
 }

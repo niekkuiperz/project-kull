@@ -3,7 +3,7 @@ import { VERSIE } from './versie.js';
 import { LokaleOpslag, ConflictFout } from './opslag/lokaal.js';
 import { verwerkAlles, legeAdministratie } from './engine/administratie.js';
 import { normaliseerVorm } from './engine/verwerking.js';
-import { vandaag } from './engine/datum.js';
+import { vandaag, MIN_DATUM, MAX_DATUM } from './engine/datum.js';
 import { esc } from './ui/hulp.js';
 import * as dashboard from './ui/dashboard.js';
 import * as leners from './ui/leners.js';
@@ -15,22 +15,24 @@ import * as instellingen from './ui/instellingen.js';
 import * as hulpScherm from './ui/help.js';
 import * as gebruikers from './ui/gebruikers.js';
 import * as account from './ui/account.js';
+import * as wensen from './ui/wensen.js';
 import { toonInloggen } from './ui/inloggen.js';
 import { ServerOpslag, SessieVerlopen } from './opslag/server.js';
 
 const ROUTES = [
-  { patroon: /^#\/?$/, scherm: dashboard },
-  { patroon: /^#\/overzicht$/, scherm: dashboard },
-  { patroon: /^#\/leners(?:\/([\w-]+))?$/, scherm: leners },
-  { patroon: /^#\/leningen$/, scherm: leningen },
-  { patroon: /^#\/leningen\/(nieuw|[\w-]+)$/, scherm: leningen, bewerk: true },
-  { patroon: /^#\/lening\/([\w-]+)$/, scherm: leningkaart },
-  { patroon: /^#\/invoer(?:\/([\w-]+))?$/, scherm: invoer },
-  { patroon: /^#\/rapporten$/, scherm: rapporten },
-  { patroon: /^#\/instellingen$/, scherm: instellingen },
+  { patroon: /^#\/?$/, scherm: dashboard, hulp: 'overzicht' },
+  { patroon: /^#\/overzicht$/, scherm: dashboard, hulp: 'overzicht' },
+  { patroon: /^#\/leners(?:\/([\w-]+))?$/, scherm: leners, hulp: 'leners' },
+  { patroon: /^#\/leningen$/, scherm: leningen, hulp: 'leningen' },
+  { patroon: /^#\/leningen\/(nieuw|[\w-]+)$/, scherm: leningen, bewerk: true, hulp: 'lening-bewerken' },
+  { patroon: /^#\/lening\/([\w-]+)$/, scherm: leningkaart, hulp: 'leningkaart' },
+  { patroon: /^#\/invoer(?:\/([\w-]+))?$/, scherm: invoer, hulp: 'invoer' },
+  { patroon: /^#\/rapporten$/, scherm: rapporten, hulp: 'rapporten' },
+  { patroon: /^#\/instellingen$/, scherm: instellingen, hulp: 'instellingen' },
   { patroon: /^#\/help$/, scherm: hulpScherm },
-  { patroon: /^#\/gebruikers$/, scherm: gebruikers },
-  { patroon: /^#\/account$/, scherm: account },
+  { patroon: /^#\/gebruikers$/, scherm: gebruikers, hulp: 'gebruikers' },
+  { patroon: /^#\/account$/, scherm: account, hulp: 'account' },
+  { patroon: /^#\/wensen$/, scherm: wensen, hulp: 'wensen' },
 ];
 
 function normaliseer(data) {
@@ -57,6 +59,10 @@ export const app = {
   verwerking: null,
   peildatum: vandaag(),
   root: null,
+
+  toast(tekst, soort) {
+    toast(tekst, soort);
+  },
 
   kanBewerken() {
     return this.gebruiker?.rol === 'beheerder' || this.gebruiker?.rol === 'eigenaar';
@@ -116,6 +122,7 @@ export const app = {
       main.innerHTML = `<div class="melding fout">Er ging iets mis bij het tonen van deze pagina: ${esc(e.message)}</div>`;
       if (e instanceof SessieVerlopen) setTimeout(() => location.reload(), 3000);
     };
+    this.hulpSleutel = route.hulp || null;
     try {
       Promise.resolve(route.scherm.toon(this, main, params, route, new URLSearchParams(query || ''))).catch(fout);
     } catch (e) {
@@ -142,6 +149,7 @@ function toonKop() {
   const server = app.opslag.modus === 'server';
   info.innerHTML = `${modus} ${server ? `<a href="#/account">${esc(app.gebruiker.naam)}</a>` : `<span>${esc(app.gebruiker.naam)}</span>`} <span>(${esc(rol)})</span>${server ? ' <button type="button" class="link" id="uitloggen">Uitloggen</button>' : ''} <span class="hint" title="Versie van Kuparium">v${esc(VERSIE)}</span>`;
   document.getElementById('nav-gebruikers').hidden = !(server && app.gebruiker.rol === 'beheerder');
+  wensen.werkMeldingBij(app);
   document.getElementById('uitloggen')?.addEventListener('click', async () => {
     await app.opslag.uitloggen();
     location.reload();
@@ -149,8 +157,44 @@ function toonKop() {
   document.body.classList.toggle('alleen-lezen', !app.kanBewerken());
 }
 
+// Past elk formulier aan zodra het op het scherm komt, ook rijen die later
+// worden toegevoegd:
+// - W-015: datumvelden laten alleen 2000 tot en met 2200 toe (een eigen max,
+//   zoals "niet in de toekomst", blijft staan);
+// - W-017: de browser onthoudt en suggereert geen eerder getypte waarden,
+//   behalve bij inloggen en wachtwoorden (daar helpt een wachtwoordbeheerder).
+function pasVeldenAan(wortel) {
+  for (const f of wortel.querySelectorAll('form')) {
+    if (!f.hasAttribute('autocomplete') && !f.querySelector('input[type=password]')) f.setAttribute('autocomplete', 'off');
+  }
+  for (const i of wortel.querySelectorAll('input, textarea')) {
+    if (!i.hasAttribute('autocomplete') && !i.closest('form')?.querySelector('input[type=password]')) i.setAttribute('autocomplete', 'off');
+    if (i.type === 'date') {
+      if (!i.min) i.min = MIN_DATUM;
+      if (!i.max) i.max = MAX_DATUM;
+    }
+  }
+}
+
+// W-016: vraagteken bij de titel dat naar de uitleg van dit scherm springt.
+function zetHulpKnop(main) {
+  const h1 = app.hulpSleutel && main.querySelector('h1:not(.alleen-print)');
+  if (h1 && !h1.querySelector('.hulp-knop')) {
+    h1.insertAdjacentHTML('beforeend', ` <a class="hulp-knop geen-print" href="#/help?over=${app.hulpSleutel}" title="Uitleg over dit scherm" aria-label="Uitleg over dit scherm">?</a>`);
+  }
+}
+
+function bewaakVelden(main) {
+  pasVeldenAan(main);
+  new MutationObserver((lijst) => {
+    for (const m of lijst) for (const n of m.addedNodes) if (n.nodeType === 1) pasVeldenAan(n.parentElement || n);
+    zetHulpKnop(main);
+  }).observe(main, { childList: true, subtree: true });
+}
+
 async function start() {
   const main = document.getElementById('inhoud');
+  bewaakVelden(main);
   try {
     if (CONFIG.api) {
       app.opslag = new ServerOpslag(CONFIG.api);

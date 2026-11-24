@@ -3,7 +3,7 @@ import { esc, euro, datum, TEKST } from './hulp.js';
 export function signaalTabel(signalen, { metLening = true } = {}) {
   if (!signalen.length) return '<p class="leeg">Er is niets dat aandacht nodig heeft.</p>';
   return `<table class="tabel">
-    <thead><tr><th>Soort</th>${metLening ? '<th>Lening</th><th>Lener(s)</th>' : ''}<th>Melding</th><th class="getal">Verschil</th><th class="geen-print"></th></tr></thead>
+    <thead><tr><th>Soort</th>${metLening ? '<th>Lening</th><th>Lener</th>' : ''}<th>Melding</th><th class="getal">Verschil</th><th class="geen-print"></th></tr></thead>
     <tbody>${signalen.map((s) => `<tr class="ernst-${s.ernst}">
       <td><span class="label ${s.ernst}">${esc(TEKST.ernst[s.ernst])}</span></td>
       ${metLening ? `<td><a href="#/lening/${esc(s.lening_id)}">${esc(s.lening_nummer || '')}</a></td><td>${esc(s.leners || '')}</td>` : ''}

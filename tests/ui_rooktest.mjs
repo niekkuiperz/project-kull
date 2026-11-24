@@ -86,6 +86,8 @@ await js(`(async () => {
     termijnbedrag: null, status: 'lopend', beginstand: null,
     wijzigingen: [{ id: 'wv', datum: '2026-01-01', aflossingsvorm: 'vrij', rente: 2.5, toelichting: 'fictief' }],
   });
+  // Oude gegevens: een fictieve lening met twee leners (W-018).
+  d.leningen.push({ ...structuredClone(d.leningen.find((x) => x.id === 'lv')), id: 'l2', nummer: 'T-2', lener_ids: ['pg', d.leners[0].id], aflossingsvorm: 'aflossingsvrij', wijzigingen: [] });
   for (let m = 1; m <= 5; m += 1) {
     d.ontvangsten.push({ id: 'og' + m, datum: '2026-0' + m + '-12', bedrag: 80, lener_id: 'pg', tegenrekening: '', omschrijving: 'rente',
       regels: [{ lening_id: 'lg', bedrag: 80 }], ingevoerd_door: 'Rooktest', ingevoerd_op: '2026-11-23T10:00:00Z',
@@ -102,7 +104,7 @@ const controles = [];
 const check = (naam, ok) => { controles.push([naam, ok]); console.log(`${ok ? 'OK  ' : 'FOUT'} ${naam}`); };
 
 const kop = await js('document.getElementById("gebruiker").innerText');
-check('versienummer zichtbaar', /v1\.1\.2/.test(kop));
+check('versienummer zichtbaar', /v1\.2\.0/.test(kop));
 
 let t = await ga('#/');
 check('overzicht laadt', /Overzicht/.test(t));
@@ -153,7 +155,54 @@ t = await ga('#/instellingen');
 check('proefmodus: testknoppen zichtbaar', /Fictieve testgegevens laden/.test(t));
 
 t = await ga('#/help');
-check('werkinstructie laadt', /Werkinstructie/.test(t));
+check('hulp laadt met werkinstructie en uitleg per scherm', /Werkinstructie/.test(t) && /Uitleg per scherm/.test(t) && /Lening bewerken/.test(t));
+
+// ---- 1.2.0 ----------------------------------------------------------------
+// W-016: vraagteken bij de titel springt naar de uitleg van dat scherm.
+for (const [hash, sleutel] of [['#/', 'overzicht'], ['#/leningen', 'leningen'], ['#/leningen/lg', 'lening-bewerken'], ['#/lening/lg', 'leningkaart'], ['#/invoer', 'invoer'], ['#/rapporten', 'rapporten'], ['#/instellingen', 'instellingen'], ['#/leners', 'leners'], ['#/wensen', 'wensen']]) {
+  await ga(hash);
+  const href = await js('document.querySelector("#inhoud h1 .hulp-knop")?.getAttribute("href")');
+  check(`vraagteken op ${hash} wijst naar ${sleutel}`, href === `#/help?over=${sleutel}`);
+}
+await ga('#/rapporten');
+await js(`(() => { const s = document.querySelector('[name=jaar]') || document.querySelector('select'); s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+await wacht(300);
+check('vraagteken blijft na opnieuw tekenen van rapporten', await js('!!document.querySelector("#inhoud h1 .hulp-knop")'));
+await ga('#/help?over=leningkaart');
+await wacht(300);
+check('hulp springt naar het juiste stuk', await js('(() => { const r = document.getElementById("hulp-leningkaart").getBoundingClientRect(); return r.top >= -2 && r.top < 80; })()'));
+
+// W-015 en W-017 op het leningformulier.
+await ga('#/leningen/lg');
+check('datumvelden: min 2000-01-01 en max 2200-12-31', await js('[...document.querySelectorAll("#lening-form input[type=date]")].every(i => i.min === "2000-01-01" && i.max === "2200-12-31")'));
+check('formulier zonder browsersuggesties', await js('document.getElementById("lening-form").getAttribute("autocomplete") === "off" && document.querySelector("[name=rente]").getAttribute("autocomplete") === "off"'));
+await js(`(() => { const f = document.getElementById('lening-form'); f.ingangsdatum.value = '1999-01-01'; f.requestSubmit(); })()`);
+await wacht(300);
+check('ingangsdatum in 1999 geweigerd bij opslaan', /Ingangsdatum: het jaartal moet tussen 2000 en 2200 liggen/.test(await js('document.getElementById("meldingen").innerText')));
+
+// W-018: één lener met zoeken.
+await ga('#/leningen/lg');
+check('geen vinkjes meer voor leners', await js('!document.querySelector("[name=lener_ids]")'));
+check('keuzelijst met de huidige lener', (await js('document.querySelector("[name=lener_id]").value')) === 'pg');
+await js(`(() => { const z = document.getElementById('zoek-lener'); z.value = 'Proef G'; z.dispatchEvent(new Event('input')); })()`);
+check('zoeken verbergt niet-passende leners', await js('[...document.querySelector("[name=lener_id]").options].filter(o => o.value && !o.hidden).every(o => /Proef G/.test(o.textContent))'));
+await ga('#/leningen/l2');
+check('lening met twee leners toont waarschuwing', /had meer dan één lener/.test(await js('document.getElementById("inhoud").innerText')));
+
+// W-017 op het invoerscherm: eigen max (vandaag) blijft staan.
+await ga('#/invoer');
+check('ontvangstdatum: min 2000, max blijft vandaag', await js('(() => { const i = document.querySelector("[name=datum]"); return i.min === "2000-01-01" && i.max !== "2200-12-31"; })()'));
+
+// W-006: wens indienen in de proefmodus en melding in het menu.
+await ga('#/wensen');
+await js(`(() => { const f = document.getElementById('wens-form'); f.tekst.value = 'Fictieve proefwens voor de rooktest.'; f.requestSubmit(); })()`);
+await wacht(500);
+check('wens staat in de lijst', /Fictieve proefwens voor de rooktest/.test(await js('document.getElementById("wensenlijst").innerText')));
+check('menu toont 1 nieuwe wens', (await js('document.querySelector("#nav-wensen .teller")?.textContent')) === '1');
+await js(`(() => { const s = document.querySelector('select[data-wens]'); s.value = 'afgehandeld'; s.dispatchEvent(new Event('change')); })()`);
+await wacht(400);
+check('na afhandelen geen teller meer', await js('!document.querySelector("#nav-wensen .teller")'));
+await foto('7-wensen');
 
 check('geen JavaScript-fouten', fouten.length === 0);
 if (fouten.length) console.log(fouten.join('\n'));

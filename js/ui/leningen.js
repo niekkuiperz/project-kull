@@ -32,7 +32,7 @@ function toonLijst(app, root) {
       <label>Geldgever <select name="geldgever">${opties(data.geldgevers.map((g) => ({ waarde: g.id, tekst: g.naam })), geldgever, { leeg: 'Alle' })}</select></label>
     </form>
     ${rijen.length ? `<table class="tabel">
-      <thead><tr><th>Lening</th><th>Lener(s)</th><th>Geldgever</th><th>Vorm</th><th class="getal">Hoofdsom</th><th class="getal">Rente</th><th class="getal">Saldo</th><th>Meldingen</th></tr></thead>
+      <thead><tr><th>Lening</th><th>Lener</th><th>Geldgever</th><th>Vorm</th><th class="getal">Hoofdsom</th><th class="getal">Rente</th><th class="getal">Saldo</th><th>Meldingen</th></tr></thead>
       <tbody>${rijen.map((l) => {
         const r = app.verwerking.resultaten.get(l.id);
         const n = signalenPer.get(l.id) || 0;
@@ -73,7 +73,8 @@ function leesFormulier(form, basis, wijzigingen) {
   const l = {
     ...basis,
     nummer: String(f.nummer || '').trim(),
-    lener_ids: lijst(f.lener_ids),
+    // W-018: precies één lener per lening; opgeslagen als lijst met één id.
+    lener_ids: f.lener_id ? [f.lener_id] : [],
     geldgever_id: f.geldgever_id || '',
     contractsoort: f.contractsoort,
     hoofdsom: leesGetal(f.hoofdsom),
@@ -144,8 +145,11 @@ function toonFormulier(app, root, id) {
           <label>Geldgever<select name="geldgever_id">${opties(data.geldgevers.map((g) => ({ waarde: g.id, tekst: g.naam })), l.geldgever_id)}</select></label>
           <label>Soort contract<select name="contractsoort">${opties(lijstOpties(TEKST.contractsoort), l.contractsoort)}</select></label>
         </div>
-        <div class="groep-label">Lener(s)</div>
-        <div class="vinkjes">${data.leners.length ? data.leners.map((p) => `<label class="vinkje"><input type="checkbox" name="lener_ids" value="${esc(p.id)}" ${l.lener_ids.includes(p.id) ? 'checked' : ''}> ${esc(p.naam)}</label>`).join('') : '<span class="leeg">Leg eerst een lener vast onder Leners.</span>'}</div>
+        ${l.lener_ids.length > 1 ? `<div class="melding waarschuwing">Deze lening had meer dan één lener (${esc(l.lener_ids.map((x) => data.leners.find((p) => p.id === x)?.naam || '?').join(', '))}). Een lening heeft nu precies één lener; bij opslaan blijft alleen de gekozen lener over. Leen je aan twee mensen samen, maak dan één lener aan met beide namen.</div>` : ''}
+        ${data.leners.length ? `<div class="rij3">
+          <label>Zoek lener<input type="search" id="zoek-lener" placeholder="Typ een deel van de naam"></label>
+          <label>Lener<select name="lener_id" required>${opties([...data.leners].sort((a, b) => a.naam.localeCompare(b.naam, 'nl')).map((p) => ({ waarde: p.id, tekst: p.naam })), l.lener_ids[0] || '', { leeg: 'Kies een lener' })}</select></label>
+        </div>` : '<p class="leeg">Leg eerst een lener vast onder <a href="#/leners">Leners</a>.</p>'}
       </fieldset>
 
       <fieldset ${ro ? 'disabled' : ''}>
@@ -274,6 +278,21 @@ function toonFormulier(app, root, id) {
     wijzigingen.sort((a, b) => a.datum.localeCompare(b.datum));
     root.querySelectorAll('[data-w]').forEach((el) => { el.value = ''; });
     tekenWijzigingen();
+  });
+
+  // W-018: zoeken in de keuzelijst met leners.
+  const zoek = root.querySelector('#zoek-lener');
+  const lenerKeuze = form.querySelector('[name=lener_id]');
+  zoek?.addEventListener('input', () => {
+    const t = zoek.value.trim().toLowerCase();
+    let eerste = null;
+    for (const o of lenerKeuze.options) {
+      if (!o.value) continue;
+      const past = !t || o.textContent.toLowerCase().includes(t);
+      o.hidden = !past;
+      if (past && !eerste) eerste = o;
+    }
+    if (t && eerste && (!lenerKeuze.value || lenerKeuze.selectedOptions[0]?.hidden)) lenerKeuze.value = eerste.value;
   });
 
   const controleer = () => {

@@ -6,6 +6,7 @@ import { legeAdministratie } from '../engine/administratie.js';
 
 const SLEUTEL = 'leningadministratie.v1';
 const MAX_HISTORIE = 15;
+const WENSEN = 'leningadministratie.wensen';
 
 export class ConflictFout extends Error {}
 
@@ -66,5 +67,35 @@ export class LokaleOpslag {
 
   async wisAlles() {
     localStorage.removeItem(SLEUTEL);
+    localStorage.removeItem(WENSEN);
+  }
+
+  // ---- Wensen (W-006), in de proefmodus alleen in deze browser --------------
+  leesWensen() {
+    try { return JSON.parse(localStorage.getItem(WENSEN) || '[]'); } catch { return []; }
+  }
+
+  async dienWensIn(tekst) {
+    const t = String(tekst || '').trim();
+    if (t.length < 5) throw new Error('Beschrijf je wens in ten minste een paar woorden.');
+    if (t.length > 2000) throw new Error('tekst is te lang.');
+    const lijst = this.leesWensen();
+    const id = lijst.reduce((m, w) => Math.max(m, w.id), 0) + 1;
+    lijst.unshift({ id, tijd: new Date().toISOString(), naam: 'Lokaal', tekst: t, status: 'nieuw' });
+    localStorage.setItem(WENSEN, JSON.stringify(lijst));
+    return { ok: true };
+  }
+
+  async wensen() {
+    return this.leesWensen();
+  }
+
+  async zetWensStatus(id, status) {
+    const lijst = this.leesWensen();
+    const w = lijst.find((x) => x.id === id);
+    if (!w) throw new Error('Deze wens bestaat niet.');
+    w.status = status;
+    localStorage.setItem(WENSEN, JSON.stringify(lijst));
+    return { ok: true };
   }
 }

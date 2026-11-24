@@ -28,8 +28,9 @@ $actie = (string)($_GET['actie'] ?? '');
 $posts = [
     'installeren', 'inloggen', 'totp_start', 'totp_bevestigen', 'totp', 'wachtwoord', 'uitloggen', 'opslaan',
     'gebruiker_toevoegen', 'gebruiker_wijzigen', 'gebruiker_herstel',
+    'wens_indienen', 'wens_status',
 ];
-$gets = ['sessie', 'laad', 'historie', 'versie', 'gebruikers', 'gebeurtenissen'];
+$gets = ['sessie', 'laad', 'historie', 'versie', 'gebruikers', 'gebeurtenissen', 'wensen'];
 
 if (in_array($actie, $posts, true)) {
     if ($methode !== 'POST') {
@@ -372,4 +373,45 @@ switch ($actie) {
             'ip' => $r['ip'],
             'naam' => $r['naam'],
         ], $rijen)]);
+
+    // -----------------------------------------------------------------------
+    // Wensen (W-006): iedereen mag indienen, alleen beheerders zien ze.
+    // -----------------------------------------------------------------------
+    case 'wens_indienen':
+        $g = vereisIngelogd();
+        $tekst = tekstVeld($in, 'tekst', 2000);
+        if (mb_strlen($tekst) < 5) {
+            throw new ApiFout('Beschrijf je wens in ten minste een paar woorden.');
+        }
+        $recent = (int)eenRij('SELECT COUNT(*) AS n FROM kull_wensen WHERE gebruiker_id = ? AND tijd >= ?', [$g['id'], time() - 86400])['n'];
+        if ($recent >= MAX_WENSEN_PER_DAG) {
+            throw new ApiFout('Je hebt vandaag al veel wensen ingediend. Probeer het morgen opnieuw.', 429);
+        }
+        voerUit('INSERT INTO kull_wensen (tijd, gebruiker_id, naam, tekst, status) VALUES (?, ?, ?, ?, ?)', [time(), $g['id'], $g['naam'], $tekst, 'nieuw']);
+        logGebeurtenis((int)$g['id'], 'wens', 'Wens ingediend');
+        antwoord(['ok' => true]);
+
+    case 'wensen':
+        vereisRol(['beheerder']);
+        $rijen = alleRijen('SELECT id, tijd, naam, tekst, status FROM kull_wensen ORDER BY id DESC LIMIT 300');
+        antwoord(['wensen' => array_map(fn ($r) => [
+            'id' => (int)$r['id'],
+            'tijd' => gmdate('c', (int)$r['tijd']),
+            'naam' => $r['naam'],
+            'tekst' => $r['tekst'],
+            'status' => $r['status'],
+        ], $rijen)]);
+
+    case 'wens_status':
+        $g = vereisRol(['beheerder']);
+        $status = tekstVeld($in, 'status', 20);
+        $id = $in['id'] ?? null;
+        if (!is_int($id) || !in_array($status, WENS_STATUSSEN, true)) {
+            throw new ApiFout('Ongeldige gegevens.');
+        }
+        if (!eenRij('SELECT id FROM kull_wensen WHERE id = ?', [$id])) {
+            throw new ApiFout('Deze wens bestaat niet.', 404);
+        }
+        voerUit('UPDATE kull_wensen SET status = ?, gewijzigd_op = ? WHERE id = ?', [$status, time(), $id]);
+        antwoord(['ok' => true]);
 }

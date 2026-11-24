@@ -2,7 +2,13 @@
 // nodig"), saldi en jaaroverzichten. Pure functies zonder opslag of scherm.
 
 import { verwerkLening, saldoBeginDag, saldoEindeDag, AFLOSSINGSVORMEN, FREQUENTIES, einddatumNodig } from './verwerking.js';
-import { plusDagen, isGeldig, formatDatum } from './datum.js';
+import { plusDagen, isGeldig, formatDatum, binnenBereik } from './datum.js';
+
+const BEREIK_TEKST = 'het jaartal moet tussen 2000 en 2200 liggen';
+// Meldt een geldige datum buiten 2000 tot en met 2200 (W-015).
+function controleerBereik(fouten, naam, iso) {
+  if (iso && isGeldig(iso) && !binnenBereik(iso)) fouten.push(`${naam}: ${BEREIK_TEKST}.`);
+}
 import { naarCenten, formatEuro } from './geld.js';
 
 export function legeAdministratie() {
@@ -202,7 +208,9 @@ export function controleerLening(l, data) {
   const fouten = [];
   if (!l.nummer) fouten.push('Lening-ID is verplicht.');
   if (data.leningen.some((x) => x.id !== l.id && x.nummer === l.nummer)) fouten.push('Dit lening-ID bestaat al.');
-  if (!l.lener_ids?.length) fouten.push('Kies minstens één lener.');
+  if (!l.lener_ids?.length) fouten.push('Kies een lener.');
+  else if (l.lener_ids.length > 1) fouten.push('Een lening heeft precies één lener.');
+  else if (!data.leners.some((p) => p.id === l.lener_ids[0])) fouten.push('De gekozen lener bestaat niet.');
   if (!data.geldgevers.some((g) => g.id === l.geldgever_id)) fouten.push('Kies een geldgever.');
   if (!(Number(l.hoofdsom) > 0)) fouten.push('Hoofdsom moet groter zijn dan nul.');
   if (!isGeldig(l.ingangsdatum)) fouten.push('Ingangsdatum is ongeldig.');
@@ -222,8 +230,20 @@ export function controleerLening(l, data) {
   if (!Number.isFinite(rente) || rente < 0 || rente > 25) fouten.push('Rente moet tussen 0 en 25 procent liggen.');
   if (l.eerste_vervaldatum && !isGeldig(l.eerste_vervaldatum)) fouten.push('Eerste vervaldatum is ongeldig.');
   if (l.document_url && !/^https?:\/\/\S+$/i.test(String(l.document_url).trim())) fouten.push('De link naar het contract moet beginnen met http:// of https://.');
+  controleerBereik(fouten, 'Ingangsdatum', l.ingangsdatum);
+  controleerBereik(fouten, 'Einddatum', l.einddatum);
+  controleerBereik(fouten, 'Renteherzieningsdatum', l.herzieningsdatum);
+  controleerBereik(fouten, 'Eerste vervaldatum', l.eerste_vervaldatum);
+  controleerBereik(fouten, 'Datum kwijtschelding', l.kwijtschelding_datum);
+  if (l.herzieningsdatum && !isGeldig(l.herzieningsdatum)) fouten.push('Renteherzieningsdatum is ongeldig.');
+  for (const w of l.wijzigingen || []) {
+    if (!isGeldig(w.datum)) fouten.push('De ingangsdatum van een wijziging is ongeldig.');
+    controleerBereik(fouten, 'Ingangsdatum van een wijziging', w.datum);
+    controleerBereik(fouten, 'Nieuwe einddatum in een wijziging', w.einddatum);
+  }
   if (l.beginstand) {
     if (!isGeldig(l.beginstand.datum)) fouten.push('Datum beginstand is ongeldig.');
+    controleerBereik(fouten, 'Datum beginstand', l.beginstand.datum);
     if (!(Number(l.beginstand.saldo) >= 0)) fouten.push('Beginsaldo moet nul of meer zijn.');
   }
   return fouten;
@@ -233,6 +253,7 @@ export function controleerOntvangst(o, data, peildatum) {
   const fouten = [];
   const waarschuwingen = [];
   if (!isGeldig(o.datum)) fouten.push('Datum is ongeldig.');
+  else if (!binnenBereik(o.datum)) fouten.push(`Datum: ${BEREIK_TEKST}.`);
   else if (o.datum > peildatum) fouten.push('De datum ligt in de toekomst.');
   const bedrag = naarCenten(o.bedrag);
   if (!(bedrag > 0)) fouten.push('Bedrag moet groter zijn dan nul.');
