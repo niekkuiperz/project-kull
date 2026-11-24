@@ -2,6 +2,7 @@ import { CONFIG } from './config.js';
 import { VERSIE } from './versie.js';
 import { LokaleOpslag, ConflictFout } from './opslag/lokaal.js';
 import { verwerkAlles, legeAdministratie } from './engine/administratie.js';
+import { normaliseerVorm } from './engine/verwerking.js';
 import { vandaag } from './engine/datum.js';
 import { esc } from './ui/hulp.js';
 import * as dashboard from './ui/dashboard.js';
@@ -38,7 +39,12 @@ function normaliseer(data) {
   d.leners ||= [];
   d.leningen ||= [];
   d.ontvangsten ||= [];
-  for (const l of d.leningen) l.wijzigingen ||= [];
+  for (const l of d.leningen) {
+    l.wijzigingen ||= [];
+    // "Vrij aflossen" bestaat niet meer; zulke leningen zijn aflossingsvrij.
+    l.aflossingsvorm = normaliseerVorm(l.aflossingsvorm);
+    for (const w of l.wijzigingen) if (w.aflossingsvorm) w.aflossingsvorm = normaliseerVorm(w.aflossingsvorm);
+  }
   for (const l of d.leners) l.tegenrekeningen ||= [];
   return d;
 }

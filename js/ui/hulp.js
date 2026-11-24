@@ -46,7 +46,7 @@ export function meldingen(fouten = [], waarschuwingen = []) {
 }
 
 export const TEKST = {
-  aflossingsvorm: { annuitair: 'Annuïtair', lineair: 'Lineair', aflossingsvrij: 'Aflossingsvrij', vrij: 'Vrij aflossen' },
+  aflossingsvorm: { annuitair: 'Annuïtair', lineair: 'Lineair', aflossingsvrij: 'Aflossingsvrij' },
   frequentie: { week: 'Per week', maand: 'Per maand', kwartaal: 'Per kwartaal', jaar: 'Per jaar' },
   status: { lopend: 'Lopend', afgelost: 'Afgelost', kwijtgescholden: 'Kwijtgescholden' },
   contractsoort: { onderhands: 'Onderhandse akte', notarieel: 'Notariële akte' },

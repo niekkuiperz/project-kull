@@ -24,7 +24,7 @@ const leningen = [
   { ...std, id: 'n1', nummer: 'L-001', lener_ids: ['p1'], geldgever_id: 'prive', hoofdsom: 25000, rente: 4, aflossingsvorm: 'annuitair', frequentie: 'maand', ingangsdatum: '2021-03-01', einddatum: '2031-03-01', beginstand: { datum: '2026-01-01', saldo: 13450 } },
   { ...std, id: 'n2', nummer: 'L-002', lener_ids: ['p2'], geldgever_id: 'bv', hoofdsom: 60000, rente: 5, aflossingsvorm: 'lineair', frequentie: 'kwartaal', ingangsdatum: '2024-01-01', einddatum: '2034-01-01', beginstand: { datum: '2026-01-01', saldo: 54000 } },
   { ...std, id: 'n3', nummer: 'L-003', lener_ids: ['p3'], geldgever_id: 'prive', hoofdsom: 150000, rente: 3.5, aflossingsvorm: 'aflossingsvrij', frequentie: 'maand', ingangsdatum: '2019-06-01', einddatum: '2039-06-01', contractsoort: 'notarieel', hypothecair: true, zekerheden: 'Recht van hypotheek op de woning', beginstand: { datum: '2026-01-01', saldo: 150000 } },
-  { ...std, id: 'n4', nummer: 'L-004', lener_ids: ['p4'], geldgever_id: 'prive', hoofdsom: 10000, rente: 2, aflossingsvorm: 'vrij', frequentie: 'jaar', ingangsdatum: '2025-01-01', einddatum: null, beginstand: { datum: '2026-01-01', saldo: 8000 } },
+  { ...std, id: 'n4', nummer: 'L-004', lener_ids: ['p4'], geldgever_id: 'prive', hoofdsom: 10000, rente: 2, aflossingsvorm: 'aflossingsvrij', frequentie: 'jaar', ingangsdatum: '2025-01-01', einddatum: null, beginstand: { datum: '2026-01-01', saldo: 8000 } },
   { ...std, id: 'n5', nummer: 'L-005', lener_ids: ['p5'], geldgever_id: 'prive', hoofdsom: 200000, rente: 2.5, aflossingsvorm: 'annuitair', frequentie: 'maand', ingangsdatum: '2026-03-01', einddatum: '2056-03-01', eigen_woning: true, contractsoort: 'notarieel', beginstand: null },
   { ...std, id: 'n6', nummer: 'L-006', lener_ids: ['p2'], geldgever_id: 'bv', hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', frequentie: 'maand', ingangsdatum: '2025-07-01', einddatum: '2028-07-01', beginstand: { datum: '2026-01-01', saldo: 8540 } },
   { ...std, id: 'n7', nummer: 'L-007', lener_ids: ['p6'], geldgever_id: 'prive', hoofdsom: 5000, rente: 0, aflossingsvorm: 'lineair', frequentie: 'jaar', ingangsdatum: '2020-01-01', einddatum: '2025-01-01', status: 'afgelost', beginstand: { datum: '2026-01-01', saldo: 0 } },
@@ -74,7 +74,7 @@ for (const t of schema('n3').filter((x) => x.vervaldatum <= tot)) {
   ontvangst('p3', t.vervaldatum, bedrag, [{ lening_id: 'n3', bedrag }]);
 }
 
-// L-004: vrij aflossen, jaarrente in januari en één handmatig verdeelde aflossing.
+// L-004: aflossingsvrij zonder einddatum, jaarrente in januari en één handmatig verdeelde aflossing.
 ontvangst('p4', '2026-01-05', 160, [{ lening_id: 'n4', bedrag: 160 }], { omschrijving: 'Rente 2025' });
 ontvangst('p4', '2026-06-15', 1000, [{ lening_id: 'n4', bedrag: 1000, rente: 0, aflossing: 1000 }], { omschrijving: 'Extra aflossing' });
 

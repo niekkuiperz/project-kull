@@ -173,22 +173,27 @@ test('extra opname verhoogt het saldo en het schema', () => {
   assert.equal(r.termijnen[r.termijnen.length - 1].aflossing, 1500000);
 });
 
-test('vrij aflossen: rente over het werkelijke saldo', () => {
-  const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'vrij', einddatum: null };
-  const regels = [
-    { ontvangst_id: 'o1', datum: '2026-02-01', bedrag: 50 },
-    { ontvangst_id: 'o2', datum: '2026-02-10', bedrag: 4000, rente: 0, aflossing: 4000 },
-    { ontvangst_id: 'o3', datum: '2026-03-01', bedrag: 50 },
-  ];
-  const r = verwerkLening(l, regels, '2026-03-05');
-  assert.equal(r.termijnen[0].rente, 5000);
-  // periode feb-mrt begint op 1 februari, vóór de aflossing van 10 februari
-  assert.equal(r.termijnen[1].rente, 5000);
-  assert.equal(r.termijnen[2].rente, 3000);
-  assert.equal(r.ontvangsten[0].wijze, 'automatisch');
-  assert.equal(r.ontvangsten[1].extra_aflossing, 400000);
-  assert.equal(r.saldo, 600000);
-});
+for (const vorm of ['aflossingsvrij', 'vrij']) {
+  // 'vrij' bestond tot en met 1.1.0 en wordt nu als aflossingsvrij gelezen.
+  test(`aflossingsvrij zonder einddatum, aflossing tussendoor (opgeslagen als '${vorm}')`, () => {
+    const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: vorm, einddatum: null };
+    const regels = [
+      { ontvangst_id: 'o1', datum: '2026-02-01', bedrag: 50 },
+      { ontvangst_id: 'o2', datum: '2026-02-10', bedrag: 4000, rente: 0, aflossing: 4000 },
+      { ontvangst_id: 'o3', datum: '2026-03-01', bedrag: 50 },
+    ];
+    const r = verwerkLening(l, regels, '2026-03-05');
+    assert.equal(r.termijnen[0].rente, 5000);
+    // periode feb-mrt begint op 1 februari, vóór de aflossing van 10 februari
+    assert.equal(r.termijnen[1].rente, 5000);
+    assert.equal(r.termijnen[2].rente, 3000);
+    assert.equal(r.ontvangsten[0].wijze, 'automatisch');
+    assert.equal(r.ontvangsten[1].extra_aflossing, 400000);
+    assert.equal(r.ontvangsten[2].wijze, 'automatisch');
+    assert.equal(r.saldo, 600000);
+    assert.ok(!r.signalen.some((x) => /Onbekende aflossingsvorm/.test(x.tekst)));
+  });
+}
 
 test('wekelijkse termijnen', () => {
   const l = { ...basis, hoofdsom: 520, rente: 0, aflossingsvorm: 'lineair', frequentie: 'week', ingangsdatum: '2026-01-05', einddatum: '2027-01-04' };
@@ -375,7 +380,7 @@ test('W-002: kwijtschelding in het jaaroverzicht als kwijtgescholden, niet als a
 });
 
 test('W-002: kwijtschelding hoger dan het saldo wordt begrensd en gemeld', () => {
-  const l = { ...basis, hoofdsom: 1000, rente: 0, aflossingsvorm: 'vrij', wijzigingen: [{ id: 'w1', datum: '2026-03-01', kwijtschelding: 1500 }] };
+  const l = { ...basis, hoofdsom: 1000, rente: 0, aflossingsvorm: 'aflossingsvrij', wijzigingen: [{ id: 'w1', datum: '2026-03-01', kwijtschelding: 1500 }] };
   const r = verwerkLening(l, [], '2026-12-31');
   assert.equal(r.saldo, 0);
   assert.ok(r.signalen.some((s) => /hoger dan het saldo/.test(s.tekst)));

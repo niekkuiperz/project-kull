@@ -22,7 +22,15 @@ import { naarCenten } from './geld.js';
 // die termijn horen (iemand betaalt de termijn van 1 maart al op 27 februari).
 export const MARGE_VOORUIT_DAGEN = 45;
 
-export const AFLOSSINGSVORMEN = ['annuitair', 'lineair', 'aflossingsvrij', 'vrij'];
+export const AFLOSSINGSVORMEN = ['annuitair', 'lineair', 'aflossingsvrij'];
+
+// Tot en met versie 1.1.0 bestond ook "vrij aflossen". Die vorm is opgegaan in
+// aflossingsvrij: daar verlaagt een extra aflossing al de rente vanaf de
+// volgende termijn en is de einddatum niet verplicht. Oude gegevens met 'vrij'
+// worden als aflossingsvrij gelezen.
+export function normaliseerVorm(vorm) {
+  return vorm === 'vrij' ? 'aflossingsvrij' : vorm;
+}
 export const FREQUENTIES = ['week', 'maand', 'kwartaal', 'jaar'];
 
 // ---------------------------------------------------------------------------
@@ -34,7 +42,7 @@ export function maakSegmenten(lening) {
   const anker = lening.eerste_vervaldatum || eenPeriodeNa(lening.ingangsdatum, lening.frequentie);
   const basis = {
     rente: Number(lening.rente || 0),
-    aflossingsvorm: lening.aflossingsvorm,
+    aflossingsvorm: normaliseerVorm(lening.aflossingsvorm),
     frequentie: lening.frequentie,
     einddatum: lening.einddatum || null,
     termijnbedrag: naarCenten(lening.termijnbedrag),
@@ -57,7 +65,7 @@ export function maakSegmenten(lening) {
   for (const w of wijzigingen) {
     const params = { ...vorige };
     if (heeft(w.rente)) params.rente = Number(w.rente);
-    if (w.aflossingsvorm) params.aflossingsvorm = w.aflossingsvorm;
+    if (w.aflossingsvorm) params.aflossingsvorm = normaliseerVorm(w.aflossingsvorm);
     if (w.einddatum) params.einddatum = w.einddatum;
     if (heeft(w.termijnbedrag)) {
       params.termijnbedrag = naarCenten(w.termijnbedrag);
@@ -102,12 +110,12 @@ function termijnDatums(params, start, grens, inclusief) {
   return datums;
 }
 
-// Zonder einddatum is een schema alleen te berekenen bij vrij aflossen,
-// aflossingsvrij (doorlopende rentetermijnen) en annuïtair met een vast
+// Zonder einddatum is een schema alleen te berekenen bij aflossingsvrij
+// (doorlopende rentetermijnen) en annuïtair met een vast
 // termijnbedrag (de looptijd volgt dan uit het bedrag). W-005.
 export function einddatumNodig(params) {
-  return params.aflossingsvorm === 'lineair'
-    || (params.aflossingsvorm === 'annuitair' && !params.termijnbedrag);
+  const vorm = normaliseerVorm(params.aflossingsvorm);
+  return vorm === 'lineair' || (vorm === 'annuitair' && !params.termijnbedrag);
 }
 
 // Verste datum waarvoor termijnen worden gemaakt bij annuïtair met een vast
@@ -122,9 +130,7 @@ function nieuweTermijn(segment, vervaldatum, rente, aflossing) {
 }
 
 // Genereert de verwachte termijnen van één segment.
-// handmatigeAflossingen: [{datum, centen}] uit het venster, alleen gebruikt bij
-// vrij aflossen (daar hangt de rente af van het werkelijke saldo).
-function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, handmatigeAflossingen, signalen) {
+function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, signalen) {
   const { params } = segment;
   const ppy = PERIODES_PER_JAAR[params.frequentie];
   const i = params.rente / 100 / ppy;
@@ -190,21 +196,6 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, handmatige
       const rente = Math.round(P * i);
       const laatste = !open && k === n - 1;
       if (rente > 0 || laatste) termijnen.push(nieuweTermijn(segIndex, datums[k], rente, laatste ? P : 0));
-    }
-  } else if (vorm === 'vrij') {
-    // Rente over het werkelijke saldo aan het begin van elke periode; aflossen
-    // mag op elk moment. Is er een einddatum, dan is de rest dan opeisbaar.
-    const saldoOp = (d) => P - handmatigeAflossingen
-      .filter((h) => h.datum <= d)
-      .reduce((s, h) => s + h.centen, 0);
-    let periodeStart = segment.start;
-    for (let k = 0; k < n; k += 1) {
-      const B = Math.max(0, saldoOp(periodeStart));
-      const rente = Math.round(B * i);
-      const laatste = params.einddatum && k === n - 1;
-      const afl = laatste ? Math.max(0, saldoOp(datums[k])) : 0;
-      if (rente > 0 || afl > 0) termijnen.push(nieuweTermijn(segIndex, datums[k], rente, afl));
-      periodeStart = datums[k];
     }
   } else {
     signalen.push({ soort: 'gegevens', ernst: 'fout', tekst: `Onbekende aflossingsvorm: ${vorm}` });
@@ -322,8 +313,8 @@ function verwerkOntvangst(o, termijnen, betaalwijze) {
 
 // W-001: na een extra aflossing wordt het schema opnieuw berekend over het
 // lagere saldo. De termijn waarin de extra aflossing valt, blijft zoals hij
-// was (rente over het saldo aan het begin van de periode, net als bij vrij
-// aflossen); vanaf de volgende termijn geldt het nieuwe saldo. Termijnen die
+// was (rente over het saldo aan het begin van de periode); vanaf de volgende
+// termijn geldt het nieuwe saldo. Termijnen die
 // al (deels) betaald zijn, blijven staan.
 // - annuïtair zonder vast bedrag: nieuw termijnbedrag, zelfde einddatum;
 // - annuïtair met vast bedrag: zelfde bedrag, kortere looptijd;
@@ -443,11 +434,8 @@ export function verwerkLening(lening, regels, peildatum) {
       || (o.datum === volgende && o.aflossing_centen > 0);
     const venster = resterend.filter(hoortBij);
     resterend = resterend.filter((o) => !hoortBij(o));
-    const handmatig = venster
-      .filter((o) => o.aflossing_centen && o.aflossing_centen > 0)
-      .map((o) => ({ datum: o.datum, centen: o.aflossing_centen }));
     const grensVrij = eenPeriodeNa(peildatum > laatsteOntvangst ? peildatum : laatsteOntvangst, seg.params.frequentie);
-    let segTermijnen = genereerTermijnen(seg, k, P, volgende, grensVrij, handmatig, signalen);
+    let segTermijnen = genereerTermijnen(seg, k, P, volgende, grensVrij, signalen);
     termijnen.push(...segTermijnen);
 
     let extra = 0;
@@ -459,7 +447,7 @@ export function verwerkLening(lening, regels, peildatum) {
         if (res.rente > 0) mutaties.push({ datum: o.datum, soort: 'rente', centen: res.rente, ontvangst_id: o.ontvangst_id });
         if (res.aflossing > 0) mutaties.push({ datum: o.datum, soort: 'aflossing', centen: res.aflossing, ontvangst_id: o.ontvangst_id });
       }
-      if (res.extra_aflossing > 0 && seg.params.aflossingsvorm !== 'vrij') {
+      if (res.extra_aflossing > 0) {
         segTermijnen = herberekenNaExtra({
           seg, segIndex: k, P, segTermijnen, extra, datum: o.datum, volgende, grensVrij, signalen, termijnen,
         });

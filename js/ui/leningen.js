@@ -153,7 +153,7 @@ function toonFormulier(app, root, id) {
         <div class="rij3">
           <label>Hoofdsom (€)<input name="hoofdsom" inputmode="decimal" value="${getal(l.hoofdsom)}" required></label>
           <label>Ingangsdatum<input name="ingangsdatum" type="date" value="${v(l.ingangsdatum)}" required></label>
-          <label>Einddatum<input name="einddatum" type="date" value="${v(l.einddatum)}"><span class="hint">Niet nodig bij vrij aflossen, aflossingsvrij en annuïtair met een vast termijnbedrag.</span></label>
+          <label>Einddatum<input name="einddatum" type="date" value="${v(l.einddatum)}"><span class="hint">Niet nodig bij aflossingsvrij en bij annuïtair met een vast termijnbedrag.</span></label>
         </div>
         <div class="rij3">
           <label>Rente per jaar (%)<input name="rente" inputmode="decimal" value="${getal(l.rente)}"></label>

@@ -78,6 +78,14 @@ await js(`(async () => {
     termijnbedrag: null, status: 'lopend', beginstand: { datum: '2026-01-01', saldo: 48000 },
     wijzigingen: [{ id: 'wg', datum: '2026-06-01', kwijtschelding: 8000, toelichting: 'schenking' }],
   });
+  // Oude gegevens: een fictieve lening die nog als "vrij aflossen" is opgeslagen.
+  d.leningen.push({
+    id: 'lv', nummer: 'V-1', lener_ids: ['pg'], geldgever_id: d.geldgevers[0].id, contractsoort: 'onderhands',
+    hoofdsom: 5000, ingangsdatum: '2025-01-01', einddatum: null, rente: 3, rentetype: 'vast',
+    aflossingsvorm: 'vrij', frequentie: 'kwartaal', betaalwijze: 'samen', eerste_vervaldatum: '',
+    termijnbedrag: null, status: 'lopend', beginstand: null,
+    wijzigingen: [{ id: 'wv', datum: '2026-01-01', aflossingsvorm: 'vrij', rente: 2.5, toelichting: 'fictief' }],
+  });
   for (let m = 1; m <= 5; m += 1) {
     d.ontvangsten.push({ id: 'og' + m, datum: '2026-0' + m + '-12', bedrag: 80, lener_id: 'pg', tegenrekening: '', omschrijving: 'rente',
       regels: [{ lening_id: 'lg', bedrag: 80 }], ingevoerd_door: 'Rooktest', ingevoerd_op: '2026-11-23T10:00:00Z',
@@ -94,7 +102,7 @@ const controles = [];
 const check = (naam, ok) => { controles.push([naam, ok]); console.log(`${ok ? 'OK  ' : 'FOUT'} ${naam}`); };
 
 const kop = await js('document.getElementById("gebruiker").innerText');
-check('versienummer zichtbaar', /v1\.1\.0/.test(kop));
+check('versienummer zichtbaar', /v1\.1\.1/.test(kop));
 
 let t = await ga('#/');
 check('overzicht laadt', /Overzicht/.test(t));
@@ -113,6 +121,14 @@ await wacht(300);
 t = await js('document.getElementById("inhoud").innerText');
 check('schema berekenen zonder einddatum geeft geen foutmelding', /Berekend schema/.test(t) && !/Einddatum is verplicht/.test(t));
 await foto('3-lening-bewerken');
+
+t = await ga('#/leningen/lv');
+check('oude lening met vrij aflossen wordt aflossingsvrij', (await js('document.getElementById("lening-form").aflossingsvorm.value')) === 'aflossingsvrij');
+check('keuzelijst aflossingsvorm heeft alleen annuïtair, lineair, aflossingsvrij',
+  (await js('[...document.getElementById("lening-form").aflossingsvorm.options].map(o => o.value).join(",")')) === 'annuitair,lineair,aflossingsvrij');
+check('geen "Vrij aflossen" meer op het scherm', !/vrij aflossen/i.test(t));
+t = await ga('#/lening/lv');
+check('leningkaart V-1 toont aflossingsvrij zonder foutmelding', /Aflossingsvrij/.test(t) && !/Onbekende aflossingsvorm/.test(t));
 
 await js(`sessionStorage.setItem('invoer.maand', '2026-05')`);
 t = await ga('#/invoer');
