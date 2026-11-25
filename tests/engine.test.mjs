@@ -46,16 +46,17 @@ test('invoervelden: duizendtallen en percentages', async () => {
   assert.ok(Number.isNaN(leesGetal('twaalf')));
 });
 
-test('annuïtair: 10.000 tegen 6% in 12 maanden geeft 860,66 per maand', () => {
+test('W-022 annuïtair (praktijk): 10.000 tegen 6% in 12 maanden geeft 858,33 per maand', () => {
   const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', einddatum: '2027-01-01' };
   const r = verwerkLening(l, [], '2026-01-01');
   assert.equal(r.termijnen.length, 12);
   assert.equal(r.termijnen[0].vervaldatum, '2026-02-01');
-  assert.equal(r.termijnen[0].rente, 5000);
-  assert.equal(r.termijnen[0].totaal, 86066);
+  // rente: 6% over de helft van 10.000 = 300 per jaar = 25 per maand
+  assert.ok(r.termijnen.every((t) => t.rente === 2500));
+  assert.ok(r.termijnen.slice(0, 11).every((t) => t.aflossing === 83333 && t.totaal === 85833));
+  // afrondingsverschil (12 x 833,33 = 9.999,96) in de laatste termijn
+  assert.equal(r.termijnen[11].aflossing, 83337);
   assert.equal(som(r.termijnen, 'aflossing'), 1000000);
-  // laatste termijn wijkt door afronding hooguit enkele centen af
-  assert.ok(Math.abs(r.termijnen[11].totaal - 86066) <= 5);
 });
 
 test('lineair: 12.000 tegen 3% in 12 maanden', () => {
@@ -78,29 +79,29 @@ test('aflossingsvrij per kwartaal: alleen rente, hoofdsom op de einddatum', () =
 test('ontvangst gelijk aan termijn wordt automatisch verdeeld; afwijkend bedrag niet', () => {
   const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', einddatum: '2027-01-01' };
   const regels = [
-    { ontvangst_id: 'o1', datum: '2026-02-01', bedrag: 860.66 },
+    { ontvangst_id: 'o1', datum: '2026-02-01', bedrag: 858.33 },
     { ontvangst_id: 'o2', datum: '2026-03-02', bedrag: 900 },
   ];
   const r = verwerkLening(l, regels, '2026-03-10');
   const [o1, o2] = r.ontvangsten;
   assert.equal(o1.wijze, 'automatisch');
-  assert.equal(o1.rente, 5000);
-  assert.equal(o1.aflossing, 81066);
+  assert.equal(o1.rente, 2500);
+  assert.equal(o1.aflossing, 83333);
   assert.equal(o2.wijze, 'te_beoordelen');
-  assert.equal(o2.verwacht, 86066);
-  assert.equal(r.saldo, 1000000 - 81066);
+  assert.equal(o2.verwacht, 85833);
+  assert.equal(r.saldo, 1000000 - 83333);
   assert.equal(r.termijnen[0].status, 'voldaan');
   assert.equal(r.termijnen[1].status, 'verlopen');
 });
 
 test('handmatige verdeling met extra aflossing', () => {
   const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', einddatum: '2027-01-01' };
-  const regels = [{ ontvangst_id: 'o1', datum: '2026-02-01', bedrag: 2000, rente: 50, aflossing: 1950 }];
+  const regels = [{ ontvangst_id: 'o1', datum: '2026-02-01', bedrag: 2000, rente: 25, aflossing: 1975 }];
   const r = verwerkLening(l, regels, '2026-02-05');
   const o = r.ontvangsten[0];
   assert.equal(o.wijze, 'handmatig');
-  assert.equal(o.extra_aflossing, 195000 - 81066);
-  assert.equal(r.saldo, 1000000 - 195000);
+  assert.equal(o.extra_aflossing, 197500 - 83333);
+  assert.equal(r.saldo, 1000000 - 197500);
   assert.equal(r.termijnen[0].status, 'voldaan');
 });
 
@@ -288,7 +289,8 @@ test('W-005: lineair en annuïtair zonder vast bedrag blijven een einddatum vrag
 });
 
 test('W-005: te laag vast termijnbedrag zonder einddatum geeft een waarschuwing, geen eindeloos schema', () => {
-  const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', termijnbedrag: 50, einddatum: null };
+  // rente volgens W-022: 6% over 5.000 = 25 per maand; 20 dekt dat niet
+  const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', termijnbedrag: 20, einddatum: null };
   const r = verwerkLening(l, [], '2026-06-01');
   assert.ok(r.signalen.some((s) => /niet hoger dan de rente/.test(s.tekst)));
   assert.ok(r.termijnen.length < 12);
@@ -324,15 +326,18 @@ test('W-001: extra aflossing bij annuïtair zonder vast bedrag verlaagt het term
   const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', einddatum: '2027-01-01' };
   const voor = verwerkLening(l, [], '2026-01-01');
   const regels = [
-    { ontvangst_id: 't1', datum: '2026-02-01', bedrag: 860.66 },
+    { ontvangst_id: 't1', datum: '2026-02-01', bedrag: 858.33 },
     { ontvangst_id: 'x', datum: '2026-02-15', bedrag: 2000, rente: 0, aflossing: 2000 },
   ];
   const r = verwerkLening(l, regels, '2026-03-31');
   const laatste = r.termijnen[r.termijnen.length - 1];
   assert.equal(laatste.vervaldatum, '2027-01-01');
-  assert.equal(renteOp(r, '2026-03-01'), Math.round((1000000 - voor.termijnen[0].aflossing) * 0.005)); // periode begon vóór de extra aflossing
+  assert.equal(renteOp(r, '2026-03-01'), voor.termijnen[1].rente); // termijn waarin de extra aflossing valt blijft gelijk
+  // W-022: vanaf april opnieuw over het saldo 10.000 - 2 x 833,33 - 2.000 = 6.333,34
+  // en de 10 resterende termijnen: aflossing 633,33, rente 6% over 3.166,67 / 12 = 15,83
   const april = r.termijnen.find((t) => t.vervaldatum === '2026-04-01');
-  assert.ok(april.totaal < 86066 - 15000, `nieuw termijnbedrag ${april.totaal}`);
+  assert.equal(april.aflossing, 63333);
+  assert.equal(april.rente, 1583);
   assert.equal(som(r.termijnen, 'aflossing') + 200000, 1000000);
 });
 
@@ -428,4 +433,84 @@ test('W-018: een lening heeft precies één bestaande lener', async () => {
   assert.match(controleerLening({ ...l, lener_ids: [] }, data).join(' '), /Kies een lener/);
   assert.match(controleerLening({ ...l, lener_ids: ['a', 'b'] }, data).join(' '), /precies één lener/);
   assert.match(controleerLening({ ...l, lener_ids: ['x'] }, data).join(' '), /bestaat niet/);
+});
+
+// ---------------------------------------------------------------------------
+// Versie 1.3.0: W-022 annuïtair volgens de praktijkmethode (fictieve bedragen)
+// ---------------------------------------------------------------------------
+test('W-022: 50.000 tegen 10% over 5 jaar geeft 60 termijnen van 1.041,67', () => {
+  const l = { ...basis, hoofdsom: 50000, rente: 10, aflossingsvorm: 'annuitair', ingangsdatum: '2026-01-01', eerste_vervaldatum: '2026-01-31', einddatum: '2030-12-31' };
+  const r = verwerkLening(l, [], '2026-01-01');
+  assert.equal(r.termijnen.length, 60);
+  assert.ok(r.termijnen.slice(0, 59).every((t) => t.rente === 20833 && t.aflossing === 83333 && t.totaal === 104166));
+  assert.equal(som(r.termijnen, 'aflossing'), 5000000);
+  assert.equal(som(r.termijnen, 'rente'), 60 * 20833);
+});
+
+test('W-022: rente en aflossing elk apart afgerond (555,56 + 54,17 = 609,73)', () => {
+  // 20.000 tegen 6,5% over 36 maanden; onafgerond zou het 609,72 zijn
+  const l = { ...basis, hoofdsom: 20000, rente: 6.5, aflossingsvorm: 'annuitair', ingangsdatum: '2026-01-01', eerste_vervaldatum: '2026-01-31', einddatum: '2028-12-31' };
+  const r = verwerkLening(l, [], '2026-01-01');
+  assert.equal(r.termijnen.length, 36);
+  assert.equal(r.termijnen[0].rente, 5417);
+  assert.equal(r.termijnen[0].aflossing, 55556);
+  assert.equal(r.termijnen[0].totaal, 60973);
+  // 36 x 555,56 = 20.000,16: de laatste termijn is 16 cent lager
+  assert.equal(r.termijnen[35].aflossing, 55540);
+  assert.equal(som(r.termijnen, 'aflossing'), 2000000);
+});
+
+test('W-022: vast termijnbedrag geeft dezelfde verdeling, ook zonder einddatum', () => {
+  // 90.000 tegen 4% over 60 maanden: 1.500 aflossing plus 150 rente
+  const l = { ...basis, hoofdsom: 90000, rente: 4, aflossingsvorm: 'annuitair', termijnbedrag: 1650, ingangsdatum: '2026-01-10', eerste_vervaldatum: '2026-02-01', einddatum: null };
+  const r = verwerkLening(l, [], '2026-02-01');
+  assert.equal(r.termijnen[0].rente, 15000);
+  assert.equal(r.termijnen[0].aflossing, 150000);
+  assert.equal(r.termijnen.length, 60);
+  assert.equal(som(r.termijnen, 'aflossing'), 9000000);
+});
+
+test('W-022: beginstand houdt de oorspronkelijke hoofdsom en looptijd als basis', () => {
+  // 90.000 tegen 4%, 60 maandtermijnen; beginstand na 36 betaalde termijnen
+  const l = { ...basis, hoofdsom: 90000, rente: 4, aflossingsvorm: 'annuitair', ingangsdatum: '2023-01-10', eerste_vervaldatum: '2023-02-01', einddatum: '2028-01-01', beginstand: { datum: '2026-01-02', saldo: 36000 } };
+  const r = verwerkLening(l, [], '2026-01-02');
+  assert.equal(r.termijnen[0].vervaldatum, '2026-02-01');
+  assert.equal(r.termijnen.length, 24);
+  // niet opnieuw over het beginsaldo (dat zou 60 rente geven)
+  assert.ok(r.termijnen.every((t) => t.rente === 15000 && t.aflossing === 150000));
+  assert.equal(r.termijnen[23].vervaldatum, '2028-01-01');
+  assert.equal(som(r.termijnen, 'aflossing'), 3600000);
+});
+
+test('W-022: beginstand op een vervaldag verwacht de termijn van die dag nog', () => {
+  const l = { ...basis, hoofdsom: 90000, rente: 4, aflossingsvorm: 'annuitair', ingangsdatum: '2023-01-10', eerste_vervaldatum: '2023-02-01', einddatum: '2028-01-01', beginstand: { datum: '2026-01-01', saldo: 37500 } };
+  const r = verwerkLening(l, [], '2026-01-01');
+  assert.equal(r.termijnen[0].vervaldatum, '2026-01-01');
+  assert.equal(r.termijnen.length, 25);
+  assert.equal(som(r.termijnen, 'aflossing'), 3750000);
+});
+
+test('W-022: wijziging (nieuwe einddatum na achterstand) rekent opnieuw vanaf het saldo', () => {
+  const l = { ...basis, hoofdsom: 8000, rente: 6, aflossingsvorm: 'annuitair', ingangsdatum: '2018-05-01', eerste_vervaldatum: '2018-05-31', einddatum: '2021-04-30',
+    beginstand: { datum: '2026-01-01', saldo: 3600 },
+    wijzigingen: [{ id: 'w1', datum: '2026-01-15', einddatum: '2026-12-31', toelichting: 'fictief' }] };
+  const voor = verwerkLening({ ...l, wijzigingen: [] }, [], '2026-01-20');
+  assert.equal(voor.termijnen.length, 1); // zonder afspraak: alles opeisbaar op de oude einddatum
+  const r = verwerkLening(l, [], '2026-01-20');
+  // 3.600 over 12 termijnen (31-1 t/m 31-12): aflossing 300, rente 6% over 1.800 / 12 = 9
+  assert.equal(r.termijnen.length, 12);
+  assert.ok(r.termijnen.every((t) => t.aflossing === 30000 && t.rente === 900));
+  assert.equal(r.saldo, 360000);
+});
+
+test('W-022: renteherziening rekent opnieuw over het saldo en de resterende termijnen', () => {
+  const l = { ...basis, hoofdsom: 12000, rente: 6, aflossingsvorm: 'annuitair', einddatum: '2027-01-01',
+    wijzigingen: [{ id: 'w1', datum: '2026-07-01', rente: 3 }] };
+  const r = verwerkLening(l, [], '2026-07-02');
+  const voor = r.termijnen.filter((t) => t.vervaldatum <= '2026-07-01');
+  const na = r.termijnen.filter((t) => t.vervaldatum > '2026-07-01');
+  assert.ok(voor.every((t) => t.rente === 3000 && t.aflossing === 100000));
+  // saldo na 6 termijnen 6.000, 6 resterend: aflossing 1.000, rente 3% over 3.000 / 12 = 7,50
+  assert.equal(na.length, 6);
+  assert.ok(na.every((t) => t.aflossing === 100000 && t.rente === 750));
 });

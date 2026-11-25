@@ -28,7 +28,7 @@ $actie = (string)($_GET['actie'] ?? '');
 $posts = [
     'installeren', 'inloggen', 'totp_start', 'totp_bevestigen', 'totp', 'wachtwoord', 'uitloggen', 'opslaan',
     'gebruiker_toevoegen', 'gebruiker_wijzigen', 'gebruiker_herstel',
-    'wens_indienen', 'wens_status',
+    'wens_indienen', 'wens_status', 'gebruiker_verwijderen',
 ];
 $gets = ['sessie', 'laad', 'historie', 'versie', 'gebruikers', 'gebeurtenissen', 'wensen'];
 
@@ -363,16 +363,51 @@ switch ($actie) {
     case 'gebeurtenissen':
         vereisRol(['beheerder']);
         $rijen = alleRijen(
-            'SELECT e.tijd, e.soort, e.omschrijving, e.ip, g.naam FROM kull_gebeurtenissen e
-             LEFT JOIN kull_gebruikers g ON g.id = e.gebruiker_id ORDER BY e.id DESC LIMIT 200'
+            'SELECT e.tijd, e.soort, e.omschrijving, e.ip, g.naam, v.naam AS verwijderd_naam FROM kull_gebeurtenissen e
+             LEFT JOIN kull_gebruikers g ON g.id = e.gebruiker_id
+             LEFT JOIN kull_verwijderde_gebruikers v ON v.id = e.gebruiker_id ORDER BY e.id DESC LIMIT 200'
         );
         antwoord(['gebeurtenissen' => array_map(fn ($r) => [
             'tijd' => gmdate('c', (int)$r['tijd']),
             'soort' => $r['soort'],
             'omschrijving' => $r['omschrijving'],
             'ip' => $r['ip'],
-            'naam' => $r['naam'],
+            'naam' => $r['naam'] ?? ($r['verwijderd_naam'] !== null ? $r['verwijderd_naam'] . ' (verwijderd)' : null),
         ], $rijen)]);
+
+    // W-020: alleen de beheerder verwijdert een gebruiker; niet zichzelf en
+    // niet de laatste actieve beheerder (zelfde regels als bij blokkeren).
+    case 'gebruiker_verwijderen':
+        $beheerder = vereisRol(['beheerder']);
+        $id = $in['id'] ?? null;
+        if (!is_int($id)) {
+            throw new ApiFout('Ongeldige gegevens.');
+        }
+        if ($id === (int)$beheerder['id']) {
+            throw new ApiFout('Je kunt je eigen account niet verwijderen.');
+        }
+        startSchrijven();
+        try {
+            $doel = eenRij('SELECT * FROM kull_gebruikers WHERE id = ?', [$id]);
+            if (!$doel) {
+                throw new ApiFout('Gebruiker niet gevonden.', 404);
+            }
+            if ($doel['rol'] === 'beheerder' && (int)$doel['actief']) {
+                $overig = (int)eenRij("SELECT COUNT(*) AS n FROM kull_gebruikers WHERE rol = 'beheerder' AND actief = 1 AND id <> ?", [$id])['n'];
+                if ($overig === 0) {
+                    throw new ApiFout('Er moet minstens één actieve beheerder overblijven.');
+                }
+            }
+            voerUit('DELETE FROM kull_verwijderde_gebruikers WHERE id = ?', [$id]);
+            voerUit('INSERT INTO kull_verwijderde_gebruikers (id, naam, verwijderd_op) VALUES (?, ?, ?)', [$id, $doel['naam'], time()]);
+            voerUit('DELETE FROM kull_gebruikers WHERE id = ?', [$id]);
+            stopSchrijven(true);
+        } catch (Throwable $e) {
+            stopSchrijven(false);
+            throw $e;
+        }
+        logGebeurtenis((int)$beheerder['id'], 'gebruiker_verwijderd', "Gebruiker {$doel['naam']} verwijderd");
+        antwoord(['ok' => true]);
 
     // -----------------------------------------------------------------------
     // Wensen (W-006): iedereen mag indienen, alleen beheerders zien ze.

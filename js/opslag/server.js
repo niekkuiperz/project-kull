@@ -95,6 +95,7 @@ export class ServerOpslag {
   voegGebruikerToe(gegevens) { return this.verzoek('gebruiker_toevoegen', { methode: 'POST', gegevens }); }
   wijzigGebruiker(gegevens) { return this.verzoek('gebruiker_wijzigen', { methode: 'POST', gegevens }); }
   herstelGebruiker(gegevens) { return this.verzoek('gebruiker_herstel', { methode: 'POST', gegevens }); }
+  verwijderGebruiker(id) { return this.verzoek('gebruiker_verwijderen', { methode: 'POST', gegevens: { id } }); }
   async gebeurtenissen() { return (await this.verzoek('gebeurtenissen')).gebeurtenissen; }
 
   // ---- Wensen (W-006) --------------------------------------------------------

@@ -195,3 +195,4 @@ body.alleen-lezen .knop.gevaar { display: none; }
 .hulp-knop:hover { background: var(--accent); color: #fff; }
 .inhoudsopgave { line-height: 1.8; }
 .hulp-scherm { margin-bottom: 1.2rem; }
+.link.gevaar { color: var(--rood); }

@@ -23,13 +23,13 @@ export const SCHERMEN = [
     <p><strong>Partijen:</strong> elke lening heeft precies één lener. Typ in <em>Zoek lener</em> een deel van de naam om de keuzelijst te beperken. Leen je aan twee mensen samen, leg dan één lener vast met beide namen en beide rekeningnummers.</p>
     <p><strong>Afspraken:</strong> neem ze over uit het contract of de akte. Aflossingsvormen:</p>
     <ul>
-      <li><strong>Annuïtair:</strong> elke termijn hetzelfde bedrag (rente plus aflossing). Noemt het contract een vast bedrag, vul dat dan in bij <em>Vast termijnbedrag</em>; dan is een einddatum niet nodig.</li>
+      <li><strong>Annuïtair:</strong> elke termijn hetzelfde bedrag, berekend zoals in de praktijk: de aflossing per termijn is de hoofdsom gedeeld door het aantal termijnen, en de rente per termijn is het rentepercentage over de helft van de hoofdsom (per jaar, verdeeld over de termijnen). Rente en aflossing zijn elke termijn gelijk; een afrondingsverschil komt in de laatste termijn. Voorbeeld: 50.000 tegen 10% over 5 jaar geeft per maand 833,33 aflossing plus 208,33 rente is 1.041,67. Noemt het contract een vast bedrag, vul dat dan in bij <em>Vast termijnbedrag</em>; de aflossing is dan dat bedrag min de rente, en een einddatum is niet nodig.</li>
       <li><strong>Lineair:</strong> elke termijn dezelfde aflossing, met rente over het dalende saldo. Einddatum verplicht.</li>
       <li><strong>Aflossingsvrij:</strong> alleen rente. Aflossen mag altijd en verlaagt de rente vanaf de volgende termijn. Zonder einddatum lopen de rentetermijnen door.</li>
     </ul>
     <p><strong>Eerste vervaldatum:</strong> de datum van de eerste termijn. Bij een nieuwe lening wordt het einde van de maand voorgesteld; ligt die op de laatste dag van een maand, dan vallen alle termijnen op de laatste dag.</p>
-    <p><strong>Beginstand:</strong> voor een lening die al liep: het saldo op een bepaalde datum uit de oude administratie. Het schema begint dan op die datum.</p>
-    <p><strong>Wijzigingen in de afspraken:</strong> bij een renteherziening, extra opname, nieuwe einddatum of een kwijtschelding of schenking. Vul alleen in wat verandert, met de ingangsdatum. Vanaf die datum rekent de app opnieuw over het resterende saldo.</p>
+    <p><strong>Beginstand:</strong> voor een lening die al liep: het saldo op een bepaalde datum uit de oude administratie. Het schema begint dan op die datum. De beginstand geldt per het begin van die dag: een termijn die op die datum vervalt, wordt nog verwacht. Is die termijn al betaald en verwerkt in het saldo, kies dan de dag erna. Bij annuïtair blijven de oorspronkelijke hoofdsom en looptijd de basis voor rente en aflossing.</p>
+    <p><strong>Wijzigingen in de afspraken:</strong> bij een renteherziening, extra opname, nieuwe einddatum of een kwijtschelding of schenking. Vul alleen in wat verandert, met de ingangsdatum. Vanaf die datum rekent de app opnieuw over het resterende saldo. Is de einddatum al voorbij en is er een nieuwe afspraak gemaakt (achterstand), leg die dan vast als wijziging met de nieuwe einddatum: de nog openstaande aflossing gaat op in het nieuwe schema, openstaande rente blijft als achterstand staan.</p>
     <p>Klik op <em>Schema berekenen</em> en vergelijk het eerste termijnbedrag met het contract voordat je opslaat. Alle datums moeten tussen 2000 en 2200 liggen.</p>`],
   ['leningkaart', 'Leningkaart', `
     <p>Alles over één lening: openstaand saldo, achterstand en ontvangen rente dit jaar, de afspraken, eventuele meldingen, het termijnschema en de betalingshistorie.</p>
@@ -52,7 +52,7 @@ export const SCHERMEN = [
     <p><strong>Inloggen</strong> gaat met e-mailadres, wachtwoord en de code uit de authenticator-app op je telefoon. Ben je je telefoon kwijt of je wachtwoord vergeten, vraag dan de beheerder om je account te herstellen.</p>`],
   ['gebruikers', 'Gebruikers (beheerder)', `
     <p>Alleen voor de beheerder. Voeg gebruikers toe met een rol: <em>Beheerder</em> mag alles, ook gebruikers beheren; <em>Bewerken</em> mag de administratie wijzigen; <em>Alleen lezen</em> mag alleen kijken.</p>
-    <p>Een nieuwe gebruiker krijgt een tijdelijk wachtwoord. Geef dat persoonlijk of telefonisch door, niet per e-mail. Met <em>Blokkeren</em> zet je iemand uit, met <em>App opnieuw koppelen</em> of <em>Nieuw wachtwoord</em> herstel je een account. Er is altijd minstens één beheerder. Het <strong>logboek</strong> toont inloggen, mislukte pogingen en andere gebeurtenissen.</p>`],
+    <p>Een nieuwe gebruiker krijgt een tijdelijk wachtwoord. Geef dat persoonlijk of telefonisch door, niet per e-mail. Met <em>Blokkeren</em> zet je iemand tijdelijk uit, met <em>App opnieuw koppelen</em> of <em>Nieuw wachtwoord</em> herstel je een account. Met <em>Verwijderen</em> verdwijnt een account definitief (e-mailadres, wachtwoord en app-koppeling); de naam blijft zichtbaar in het logboek en bij wat diegene heeft ingevoerd. Je kunt jezelf niet verwijderen, en er is altijd minstens één actieve beheerder. Het <strong>logboek</strong> toont inloggen, mislukte pogingen en andere gebeurtenissen.</p>`],
 ];
 
 export function toon(app, root, params, route, query) {

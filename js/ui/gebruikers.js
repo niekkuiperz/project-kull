@@ -48,7 +48,8 @@ export async function toon(app, root) {
         <td>${g.id === app.gebruiker.id ? '' : `
           <button type="button" class="link" data-actie="blokkeer">${g.actief ? 'Blokkeren' : 'Deblokkeren'}</button> &middot;
           <button type="button" class="link" data-actie="wachtwoord">Nieuw wachtwoord</button> &middot;
-          <button type="button" class="link" data-actie="tweestaps">App opnieuw koppelen</button>`}</td>
+          <button type="button" class="link" data-actie="tweestaps">App opnieuw koppelen</button> &middot;
+          <button type="button" class="link gevaar" data-actie="verwijder">Verwijderen</button>`}</td>
       </tr>`).join('')}</tbody>
     </table>
 
@@ -121,6 +122,13 @@ export async function toon(app, root) {
         if (!confirm(`De authenticator-app van ${g.naam} ontkoppelen? Bij de volgende keer inloggen koppelt ${g.naam} de app opnieuw.`)) return;
         await app.opslag.herstelGebruiker({ id, tweestaps: true });
         await toon(app, root);
+      } else if (actie === 'verwijder') {
+        // W-020: definitief. De naam blijft in versiegeschiedenis, ontvangsten
+        // en logboek; e-mailadres, wachtwoord en app-koppeling verdwijnen.
+        if (!confirm(`${g.naam} definitief verwijderen?\n\nHet account (e-mailadres, wachtwoord en koppeling met de app) verdwijnt en een open sessie stopt direct. De naam blijft zichtbaar in het logboek en bij wat ${g.naam} heeft ingevoerd.\n\nGaat het om tijdelijk niet meewerken, kies dan liever Blokkeren.`)) return;
+        await app.opslag.verwijderGebruiker(id);
+        await toon(app, root);
+        app.toast(`${g.naam} is verwijderd`);
       }
     });
   });

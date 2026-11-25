@@ -56,6 +56,9 @@ export function maakSegmenten(lening) {
     params: basis,
     wijziging: null,
     isBeginstand: Boolean(lening.beginstand),
+    // W-022: annuïtair rekent met de oorspronkelijke hoofdsom en looptijd,
+    // ook als de administratie met een beginstand begint.
+    oorsprong: { hoofdsom: naarCenten(lening.hoofdsom), ingangsdatum: lening.ingangsdatum },
   }];
   const wijzigingen = [...(lening.wijzigingen || [])]
     .filter((w) => w.datum > start)
@@ -151,36 +154,52 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, signalen) 
     return termijnen;
   }
 
+  // W-022: annuïtair zoals in de praktijk. Vaste aflossing per termijn
+  // (hoofdsom gedeeld door het aantal termijnen) en vaste rente per termijn
+  // (rentepercentage over de helft van de hoofdsom). Elk deel apart op centen
+  // afgerond; het verschil komt in de laatste termijn. Bij een beginstand
+  // blijven de oorspronkelijke hoofdsom en looptijd de basis; na een wijziging
+  // of extra aflossing zijn het saldo op dat moment en de resterende termijnen
+  // de basis. Met een vast termijnbedrag is de aflossing dat bedrag min de
+  // rente, en volgt de looptijd daaruit.
+  let annuiteit = null;
+  if (vorm === 'annuitair') {
+    const B0 = segment.oorsprong && segment.isBeginstand ? segment.oorsprong.hoofdsom : P;
+    annuiteit = { B0, rente: Math.round((B0 / 2) * i) };
+  }
+
   // Annuïtair met vast bedrag en zonder einddatum: termijnen tot de lening is
   // afgelost. Kan het bedrag de rente niet dekken, dan alleen tot de grens.
-  const onbegrensd = open && vorm === 'annuitair' && params.termijnbedrag > Math.round(P * i);
+  const onbegrensd = open && vorm === 'annuitair' && params.termijnbedrag > annuiteit.rente;
   const datums = termijnDatums(params, segment.start, onbegrensd ? VERSTE_DATUM : grensVrij, segment.isBeginstand);
   const n = datums.length;
   if (n === 0) return termijnen;
 
   if (vorm === 'annuitair') {
-    let betaling = params.termijnbedrag;
-    if (!betaling) {
-      betaling = i === 0 ? Math.round(P / n) : Math.round((P * i) / (1 - Math.pow(1 + i, -n)));
+    const rente = annuiteit.rente;
+    let afl;
+    if (params.termijnbedrag) {
+      afl = params.termijnbedrag - rente;
+    } else {
+      // Aantal termijnen over de looptijd waarop de aflossing is gebaseerd.
+      const N = segment.oorsprong && segment.isBeginstand
+        ? termijnDatums(params, segment.oorsprong.ingangsdatum, grensVrij, false).length
+        : n;
+      afl = N > 0 ? Math.round(annuiteit.B0 / N) : P;
+    }
+    if (afl <= 0) {
+      afl = 0;
+      signalen.push({ soort: 'gegevens', ernst: 'waarschuwing', tekst: 'Het vaste termijnbedrag is niet hoger dan de rente; er wordt niets afgelost.' });
     }
     let B = P;
-    let gemeld = false;
     for (let k = 0; k < n && B > 0; k += 1) {
-      const rente = Math.round(B * i);
-      let afl = betaling - rente;
-      if (afl <= 0 && (afl < 0 || open)) {
-        afl = 0;
-        if (!gemeld) {
-          signalen.push({ soort: 'gegevens', ernst: 'waarschuwing', tekst: 'Het vaste termijnbedrag is niet hoger dan de rente; er wordt niets afgelost.' });
-          gemeld = true;
-        }
-      }
-      if ((!open && k === n - 1) || afl > B) afl = B;
+      let a = Math.min(afl, B);
+      if (!open && k === n - 1) a = B;
       // Zonder einddatum: een afrondingsrestje van hooguit een euro gaat mee
       // in deze termijn in plaats van een extra termijn van een paar cent.
-      if (open && afl > 0 && B - afl <= 100) afl = B;
-      termijnen.push(nieuweTermijn(segIndex, datums[k], rente, afl));
-      B -= afl;
+      if (open && a > 0 && B - a <= 100) a = B;
+      termijnen.push(nieuweTermijn(segIndex, datums[k], rente, a));
+      B -= a;
     }
   } else if (vorm === 'lineair') {
     const a = Math.round(P / n);
@@ -316,8 +335,10 @@ function verwerkOntvangst(o, termijnen, betaalwijze) {
 // was (rente over het saldo aan het begin van de periode); vanaf de volgende
 // termijn geldt het nieuwe saldo. Termijnen die
 // al (deels) betaald zijn, blijven staan.
-// - annuïtair zonder vast bedrag: nieuw termijnbedrag, zelfde einddatum;
-// - annuïtair met vast bedrag: zelfde bedrag, kortere looptijd;
+// - annuïtair zonder vast bedrag: nieuw termijnbedrag, zelfde einddatum
+//   (W-022: aflossing en rente opnieuw over het nieuwe saldo);
+// - annuïtair met vast bedrag: zelfde bedrag, kortere looptijd (rente opnieuw
+//   over het nieuwe saldo, de rest aflossing);
 // - lineair: lagere aflossing per termijn, zelfde einddatum;
 // - aflossingsvrij: lagere rente.
 function herberekenNaExtra({ seg, segIndex, P, segTermijnen, extra, datum, volgende, grensVrij, signalen, termijnen }) {
@@ -333,7 +354,7 @@ function herberekenNaExtra({ seg, segIndex, P, segTermijnen, extra, datum, volge
   for (const t of weg) termijnen.splice(termijnen.indexOf(t), 1);
   const rest = P - behouden.reduce((s, t) => s + t.aflossing, 0) - extra;
   const nieuw = rest > 0
-    ? genereerTermijnen({ ...seg, start: vanaf, isBeginstand: false }, segIndex, rest, volgende, grensVrij, [], signalen)
+    ? genereerTermijnen({ ...seg, start: vanaf, isBeginstand: false, oorsprong: null }, segIndex, rest, volgende, grensVrij, signalen)
     : [];
   termijnen.push(...nieuw);
   return [...behouden, ...nieuw];
@@ -412,6 +433,25 @@ export function verwerkLening(lening, regels, peildatum) {
     const seg = segmenten[k];
     const volgende = segmenten[k + 1]?.start ?? null;
     if (k > 0) {
+      // Nieuwe afspraak na een verstreken einddatum (achterstand): de nog
+      // openstaande aflossing van eerdere termijnen gaat op in het nieuwe
+      // schema, zodat over het werkelijke saldo opnieuw wordt gerekend
+      // (W-022). Openstaande rente blijft als achterstand staan.
+      const vorigeEind = segmenten[k - 1].params.einddatum;
+      if (vorigeEind && vorigeEind < seg.start) {
+        for (const t of termijnen) {
+          if (t.vervaldatum >= seg.start) continue;
+          const openA = t.aflossing - t.ontvangen_aflossing;
+          if (openA > 0) {
+            t.aflossing -= openA;
+            P += openA;
+          }
+        }
+        for (let x = termijnen.length - 1; x >= 0; x -= 1) {
+          const t = termijnen[x];
+          if (t.rente + t.aflossing === 0 && !t.betalingen.length) termijnen.splice(x, 1);
+        }
+      }
       if (seg.opname > 0) {
         mutaties.push({ datum: seg.start, soort: 'opname', centen: seg.opname });
         P += seg.opname;

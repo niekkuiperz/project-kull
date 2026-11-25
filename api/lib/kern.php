@@ -153,6 +153,14 @@ function maakTabellen(PDO $pdo): void
     )$eind");
     // W-006: wensen van gebruikers. Los van de administratie, zodat ook wie
     // alleen mag lezen een wens kan indienen; alleen beheerders zien ze.
+    // W-020: van een verwijderde gebruiker blijft alleen de naam bewaard, zodat
+    // het logboek leesbaar blijft. E-mailadres, wachtwoord en
+    // authenticatorkoppeling verdwijnen met het account.
+    $pdo->exec("CREATE TABLE IF NOT EXISTS kull_verwijderde_gebruikers (
+        id BIGINT NOT NULL PRIMARY KEY,
+        naam $tekst NOT NULL,
+        verwijderd_op BIGINT NOT NULL
+    )$eind");
     $pdo->exec("CREATE TABLE IF NOT EXISTS kull_wensen (
         id $id,
         tijd BIGINT NOT NULL,
