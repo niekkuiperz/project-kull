@@ -94,15 +94,17 @@ export function maakSegmenten(lening) {
   return segmenten;
 }
 
-// inclusief: een termijn die precies op de startdatum vervalt hoort erbij.
-// Dat geldt voor een beginstand (saldo per het begin van die dag; de termijn
-// van die dag wordt dus nog betaald), niet voor een nieuwe lening of wijziging.
-function termijnDatums(params, start, grens, inclusief) {
+// Een termijn die precies op de startdatum vervalt, hoort er niet bij. Dat
+// geldt voor een nieuwe lening, een wijziging en ook voor een beginstand:
+// begint de administratie per 1-1, dan is de eerste termijn 1-2 (besluit
+// 25-11-2026; tot en met 1.2.0 verwachtte een beginstand de termijn van die
+// dag nog).
+function termijnDatums(params, start, grens) {
   const datums = [];
   const { anker, frequentie, einddatum } = params;
   for (let k = 0; k < 20000; k += 1) {
     const d = termijnDatum(anker, frequentie, k);
-    if (inclusief ? d < start : d <= start) continue;
+    if (d <= start) continue;
     if (einddatum && d > einddatum) break;
     if (!einddatum && d > grens) break;
     datums.push(d);
@@ -171,7 +173,7 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, signalen) 
   // Annuïtair met vast bedrag en zonder einddatum: termijnen tot de lening is
   // afgelost. Kan het bedrag de rente niet dekken, dan alleen tot de grens.
   const onbegrensd = open && vorm === 'annuitair' && params.termijnbedrag > annuiteit.rente;
-  const datums = termijnDatums(params, segment.start, onbegrensd ? VERSTE_DATUM : grensVrij, segment.isBeginstand);
+  const datums = termijnDatums(params, segment.start, onbegrensd ? VERSTE_DATUM : grensVrij);
   const n = datums.length;
   if (n === 0) return termijnen;
 
@@ -183,7 +185,7 @@ function genereerTermijnen(segment, segIndex, P, volgende, grensVrij, signalen) 
     } else {
       // Aantal termijnen over de looptijd waarop de aflossing is gebaseerd.
       const N = segment.oorsprong && segment.isBeginstand
-        ? termijnDatums(params, segment.oorsprong.ingangsdatum, grensVrij, false).length
+        ? termijnDatums(params, segment.oorsprong.ingangsdatum, grensVrij).length
         : n;
       afl = N > 0 ? Math.round(annuiteit.B0 / N) : P;
     }

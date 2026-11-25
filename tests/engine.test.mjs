@@ -145,9 +145,9 @@ test('beginstand: schema loopt pas vanaf de beginstand', () => {
     beginstand: { datum: '2026-01-01', saldo: 55000 },
   };
   const r = verwerkLening(l, [{ ontvangst_id: 'oud', datum: '2025-12-01', bedrag: 554.6 }], '2026-01-01');
-  // de termijn van 1 januari valt na de beginstand (saldo per begin van de dag)
-  assert.equal(r.termijnen[0].vervaldatum, '2026-01-01');
-  assert.equal(r.termijnen.length, 121);
+  // beginstand per 1-1: de eerste termijn is 1-2 (besluit 25-11-2026)
+  assert.equal(r.termijnen[0].vervaldatum, '2026-02-01');
+  assert.equal(r.termijnen.length, 120);
   assert.equal(som(r.termijnen, 'aflossing'), 5500000);
   assert.equal(r.ontvangsten[0].wijze, 'voor_start');
   assert.equal(r.saldo, 5500000);
@@ -482,12 +482,13 @@ test('W-022: beginstand houdt de oorspronkelijke hoofdsom en looptijd als basis'
   assert.equal(som(r.termijnen, 'aflossing'), 3600000);
 });
 
-test('W-022: beginstand op een vervaldag verwacht de termijn van die dag nog', () => {
-  const l = { ...basis, hoofdsom: 90000, rente: 4, aflossingsvorm: 'annuitair', ingangsdatum: '2023-01-10', eerste_vervaldatum: '2023-02-01', einddatum: '2028-01-01', beginstand: { datum: '2026-01-01', saldo: 37500 } };
+test('W-022: beginstand op een vervaldag: eerste termijn een periode later', () => {
+  const l = { ...basis, hoofdsom: 90000, rente: 4, aflossingsvorm: 'annuitair', ingangsdatum: '2023-01-10', eerste_vervaldatum: '2023-02-01', einddatum: '2028-01-01', beginstand: { datum: '2026-01-01', saldo: 36000 } };
   const r = verwerkLening(l, [], '2026-01-01');
-  assert.equal(r.termijnen[0].vervaldatum, '2026-01-01');
-  assert.equal(r.termijnen.length, 25);
-  assert.equal(som(r.termijnen, 'aflossing'), 3750000);
+  assert.equal(r.termijnen[0].vervaldatum, '2026-02-01');
+  assert.equal(r.termijnen.length, 24);
+  assert.ok(r.termijnen.every((t) => t.rente === 15000 && t.aflossing === 150000));
+  assert.equal(som(r.termijnen, 'aflossing'), 3600000);
 });
 
 test('W-022: wijziging (nieuwe einddatum na achterstand) rekent opnieuw vanaf het saldo', () => {
