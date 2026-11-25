@@ -34,7 +34,7 @@ export function toon(app, root) {
     </section>
 
     <section>
-      <h2>Versiegeschiedenis</h2>
+      <h2>Versiebeheer</h2>
       <div id="historie"><p class="leeg">Laden...</p></div>
     </section>
 
@@ -67,7 +67,7 @@ export function toon(app, root) {
       const json = JSON.parse(await bestand.text());
       const data = json.soort === 'leningadministratie-backup' ? json.data : json;
       if (!Array.isArray(data?.leningen) || !Array.isArray(data?.ontvangsten) || !Array.isArray(data?.leners)) throw new Error('Dit is geen back-up van de leningadministratie.');
-      if (!confirm(`Back-up terugzetten met ${data.leningen.length} leningen en ${data.ontvangsten.length} ontvangsten? De huidige gegevens worden vervangen (de huidige stand blijft in de versiegeschiedenis).`)) return;
+      if (!confirm(`Back-up terugzetten met ${data.leningen.length} leningen en ${data.ontvangsten.length} ontvangsten? De huidige gegevens worden vervangen (de huidige stand blijft in Versiebeheer).`)) return;
       if (await app.vervangAlles(data, 'Back-up teruggezet')) app.ga('#/');
     } catch (fout) {
       melding.innerHTML = meldingen([fout.message]);

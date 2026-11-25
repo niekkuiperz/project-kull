@@ -123,7 +123,7 @@ export async function toon(app, root) {
         await app.opslag.herstelGebruiker({ id, tweestaps: true });
         await toon(app, root);
       } else if (actie === 'verwijder') {
-        // W-020: definitief. De naam blijft in versiegeschiedenis, ontvangsten
+        // W-020: definitief. De naam blijft in versiebeheer, ontvangsten
         // en logboek; e-mailadres, wachtwoord en app-koppeling verdwijnen.
         if (!confirm(`${g.naam} definitief verwijderen?\n\nHet account (e-mailadres, wachtwoord en koppeling met de app) verdwijnt en een open sessie stopt direct. De naam blijft zichtbaar in het logboek en bij wat ${g.naam} heeft ingevoerd.\n\nGaat het om tijdelijk niet meewerken, kies dan liever Blokkeren.`)) return;
         await app.opslag.verwijderGebruiker(id);

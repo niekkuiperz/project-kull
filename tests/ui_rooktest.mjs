@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { VERSIE } from '../js/versie.js';
 
 const basis = process.argv[2] || 'http://127.0.0.1:8795/';
 const schermMap = process.argv[3] || null;
@@ -104,7 +105,7 @@ const controles = [];
 const check = (naam, ok) => { controles.push([naam, ok]); console.log(`${ok ? 'OK  ' : 'FOUT'} ${naam}`); };
 
 const kop = await js('document.getElementById("gebruiker").innerText');
-check('versienummer zichtbaar', /v1\.3\.0/.test(kop));
+check('versienummer zichtbaar', kop.includes(`v${VERSIE}`));
 
 let t = await ga('#/');
 check('overzicht laadt', /Overzicht/.test(t));
@@ -203,6 +204,36 @@ await js(`(() => { const s = document.querySelector('select[data-wens]'); s.valu
 await wacht(400);
 check('na afhandelen geen teller meer', await js('!document.querySelector("#nav-wensen .teller")'));
 await foto('7-wensen');
+
+// ---- 1.4.0 ----------------------------------------------------------------
+// W-023: Hulp rechts in de kop, niet meer in het menu.
+check('Hulp niet meer in het menu', await js('![...document.querySelectorAll("nav a")].some(a => a.getAttribute("href") === "#/help")'));
+check('Hulp rechts in de kop', (await js('document.getElementById("kop-hulp")?.getAttribute("href")')) === '#/help');
+await js('document.getElementById("kop-hulp").click()');
+await wacht(400);
+check('Hulp-knop in de kop opent de hulp en is actief', await js('location.hash === "#/help" && document.getElementById("kop-hulp").classList.contains("actief")'));
+check('hulp linkt naar Versiegeschiedenis', await js('!!document.querySelector("#inhoud a[href=\'#/versies\']")'));
+
+// W-024: Versiegeschiedenis via het versienummer, voor iedereen.
+await js('document.querySelector(".gebruiker a[href=\'#/versies\']").click()');
+await wacht(400);
+t = await js('document.getElementById("inhoud").innerText');
+check('versienummer opent Versiegeschiedenis', /Versiegeschiedenis/.test(t) && /Versie 1\.4\.0/.test(t) && /Versie 1\.0\.0/.test(t));
+check('per versie functioneel en beveiliging', /Functioneel/.test(t) && /Beveiliging/.test(t));
+check('versiegeschiedenis zonder namen uit de testgegevens', !/Proef|L-0\d\d/.test(t));
+t = await ga('#/instellingen');
+check('Instellingen: Versiebeheer in plaats van Versiegeschiedenis', /Versiebeheer/.test(t) && !/Versiegeschiedenis/.test(t));
+
+// W-019: keuze bij te veel betaald en herleidbaarheid.
+await ga('#/invoer');
+await js(`(() => { const s = document.querySelector('[name=lener_id]'); s.value = 'pg'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+await wacht(300);
+check('ontvangstformulier heeft de keuze bij te veel betaald', (await js('document.querySelector("select.keuze")?.options.length')) === 6);
+t = await ga('#/lening/n3');
+check('leningkaart: kolommen Betaald met en Gebruikt voor', /Betaald met/.test(t) && /Gebruikt voor/.test(t));
+check('termijnschema noemt de ontvangstdatum per termijn', /\d\d-\d\d-2026: €/.test(t));
+check('afwijkende ontvangst blijft zichtbaar als te beoordelen', /Te beoordelen|restant te beoordelen/.test(t));
+await foto('8-leningkaart-herleidbaar');
 
 check('geen JavaScript-fouten', fouten.length === 0);
 if (fouten.length) console.log(fouten.join('\n'));

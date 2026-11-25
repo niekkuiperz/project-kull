@@ -1,6 +1,6 @@
 // Invoer van ontvangsten (F-08 t/m F-13).
 
-import { esc, euro, datum, opties, nieuwId, meldingen, TEKST, leesGetal } from './hulp.js';
+import { esc, euro, datum, opties, nieuwId, meldingen, TEKST, leesGetal, gebruiktVoorTekst } from './hulp.js';
 import { controleerOntvangst, stelLenerVoor } from '../engine/administratie.js';
 import { plusDagen } from '../engine/datum.js';
 import { naarCenten, formatEuro } from '../engine/geld.js';
@@ -97,6 +97,7 @@ export function toon(app, root, [id], _route, query) {
           <td class="klein">${esc(verwachtTekst(app, l, rond))}</td>
           <td class="getal"><input class="regel-bedrag smal" inputmode="decimal" value="${r ? esc(euroInvoer(naarCenten(r.bedrag))) : ''}" ${r ? '' : 'disabled'} placeholder="${lijst.length === 1 ? 'zelfde als bedrag' : ''}"></td>
           <td>
+            <label class="klein keuze-label" ${handmatig ? 'hidden' : ''}>Bij te veel betaald<select class="keuze" ${r ? '' : 'disabled'}>${opties(Object.entries(TEKST.keuze).map(([waarde, tekst]) => ({ waarde, tekst })), r?.keuze || '')}</select></label>
             <label class="vinkje klein"><input type="checkbox" class="handmatig" ${handmatig ? 'checked' : ''} ${r ? '' : 'disabled'}> zelf verdelen</label>
             <span class="split" ${handmatig ? '' : 'hidden'}>
               rente <input class="regel-rente smal" inputmode="decimal" value="${handmatig ? esc(euroInvoer(naarCenten(r.rente ?? 0))) : ''}">
@@ -107,7 +108,7 @@ export function toon(app, root, [id], _route, query) {
         </tr>`;
       }).join('')}
       </tbody></table>
-      <p class="hint">Laat "zelf verdelen" uit: dan verdeelt het systeem een bedrag dat precies klopt met de verwachte termijn, en meldt het een afwijkend bedrag om te beoordelen.</p>
+      <p class="hint">Laat "zelf verdelen" uit: dan verdeelt het systeem het bedrag zelf. Klopt het precies, dan gaat het naar de open termijn(en). Is het meer, dan gaat het naar de open termijnen, oudste eerst, elke volle termijn volgens het schema; wat overblijft gebeurt volgens "Bij te veel betaald". Is het minder dan de oudste open termijn, dan komt het bij "te beoordelen".</p>
     </fieldset>`;
   };
 
@@ -119,6 +120,8 @@ export function toon(app, root, [id], _route, query) {
       if (tr.querySelector('.handmatig').checked) {
         r.rente = leesGetal(tr.querySelector('.regel-rente').value) ?? 0;
         r.aflossing = leesGetal(tr.querySelector('.regel-aflossing').value) ?? 0;
+      } else if (tr.querySelector('.keuze').value) {
+        r.keuze = tr.querySelector('.keuze').value;
       }
       uit.push(r);
     });
@@ -134,10 +137,11 @@ export function toon(app, root, [id], _route, query) {
     if (e.target.name === 'datum') { regels = leesRegels(); tekenRegels(); }
     if (e.target.classList.contains('kies')) {
       const tr = e.target.closest('tr');
-      tr.querySelectorAll('.regel-bedrag, .handmatig').forEach((el) => { el.disabled = !e.target.checked; });
+      tr.querySelectorAll('.regel-bedrag, .handmatig, .keuze').forEach((el) => { el.disabled = !e.target.checked; });
     }
     if (e.target.classList.contains('handmatig')) {
       e.target.closest('tr').querySelector('.split').hidden = !e.target.checked;
+      e.target.closest('tr').querySelector('.keuze-label').hidden = e.target.checked;
     }
   });
 
@@ -159,7 +163,7 @@ export function toon(app, root, [id], _route, query) {
     let rente = open.reduce((s, t) => s + Math.max(0, t.rente - t.ontvangen_rente), 0);
     if (bewerk) {
       const eigen = app.verwerking.resultaten.get(tr.dataset.lening)?.ontvangsten.find((x) => x.ontvangst_id === bewerk.id);
-      if (eigen && eigen.wijze !== 'te_beoordelen') rente += eigen.rente;
+      if (eigen && !['te_beoordelen', 'teruggestort', 'voor_start'].includes(eigen.wijze)) rente += eigen.rente;
     }
     rente = Math.min(rente, bedrag);
     tr.querySelector('.regel-rente').value = euroInvoer(rente);
@@ -210,9 +214,9 @@ export function toon(app, root, [id], _route, query) {
     if (!ok) return;
     sessionStorage.setItem('invoer.datum', kandidaat.datum);
     const uitkomst = kandidaat.regels.map((r) => app.verwerking.resultaten.get(r.lening_id)?.ontvangsten.find((x) => x.ontvangst_id === kandidaat.id && x.regel === kandidaat.regels.indexOf(r)));
-    const teBeoordelen = uitkomst.some((u) => u?.wijze === 'te_beoordelen');
+    const teBeoordelen = uitkomst.some((u) => u?.wijze === 'te_beoordelen' || u?.wijze === 'deels');
     const { toast } = await import('../app.js');
-    toast(teBeoordelen ? 'Opgeslagen. Het bedrag wijkt af: deze ontvangst staat bij "te beoordelen".' : 'Opgeslagen en verwerkt.', teBeoordelen ? 'waarschuwing' : 'ok');
+    toast(teBeoordelen ? 'Opgeslagen. Het bedrag wijkt af: deze ontvangst (of het restant) staat bij "te beoordelen".' : 'Opgeslagen en verwerkt.', teBeoordelen ? 'waarschuwing' : 'ok');
     if (bewerk) app.ga(teBeoordelen ? `#/invoer/${kandidaat.id}` : '#/invoer');
     else toon(app, root, [], null, new URLSearchParams());
   });
@@ -241,18 +245,31 @@ function verwerkingHtml(app, o) {
     const res = app.verwerking.resultaten.get(r.lening_id)?.ontvangsten.find((x) => x.ontvangst_id === o.id && x.regel === i);
     if (!lening || !res) return '';
     const open = openTermijnen(app, lening.id, o.datum);
-    return `<tr class="${res.wijze === 'te_beoordelen' ? 'ernst-hoog' : ''}">
+    const leeg = ['te_beoordelen', 'teruggestort', 'voor_start'].includes(res.wijze);
+    const extra = [
+      res.extra_aflossing ? `waarvan extra aflossing ${euro(res.extra_aflossing)}` : '',
+      res.restant ? `restant ${euro(res.restant)} te beoordelen` : '',
+      res.teruggestort ? `teruggestort ${euro(res.teruggestort)}` : '',
+      gebruiktVoor(app, lening.id, o.id, i),
+    ].filter(Boolean).join('<br>');
+    return `<tr class="${res.wijze === 'te_beoordelen' || res.wijze === 'deels' ? 'ernst-hoog' : ''}">
       <td><a href="#/lening/${esc(lening.id)}">${esc(lening.nummer)}</a></td>
       <td class="getal">${euro(res.bedrag)}</td>
-      <td>${esc(TEKST.wijze[res.wijze])}${res.reden ? `<br><span class="klein">${esc(res.reden)}</span>` : ''}</td>
-      <td class="getal">${res.wijze === 'te_beoordelen' ? '' : euro(res.rente)}</td>
-      <td class="getal">${res.wijze === 'te_beoordelen' ? '' : euro(res.aflossing)}</td>
+      <td>${esc(TEKST.wijze[res.wijze])}${res.reden ? `<br><span class="klein">${esc(res.reden)}</span>` : ''}${extra ? `<br><span class="klein">${extra}</span>` : ''}</td>
+      <td class="getal">${leeg ? '' : euro(res.rente)}</td>
+      <td class="getal">${leeg ? '' : euro(res.aflossing)}</td>
       <td class="klein">${open.map((t) => `${datum(t.vervaldatum)}: rente ${euro(t.rente - t.ontvangen_rente)}, aflossing ${euro(t.aflossing - t.ontvangen_aflossing)}`).join('<br>') || 'geen'}</td>
     </tr>`;
   }).join('');
   return `<section><h2>Verwerking</h2>
     <table class="tabel compact"><thead><tr><th>Lening</th><th class="getal">Bedrag</th><th>Verwerking</th><th class="getal">Rente</th><th class="getal">Aflossing</th><th>Nu nog open (oudste termijnen)</th></tr></thead><tbody>${rijen}</tbody></table>
-    <p class="hint">Te beoordelen? Zet in de verdeling hierboven "zelf verdelen" aan, vul rente en aflossing in volgens de afspraak met de lener, en sla op. Twijfel je, overleg dan eerst met de lener.</p></section>`;
+    <p class="hint">Te beoordelen? Kies hierboven bij "Bij te veel betaald" wat er met het restant gebeurt, of zet "zelf verdelen" aan en vul rente en aflossing in volgens de afspraak met de lener. Sla daarna op. Twijfel je, overleg dan eerst met de lener.</p></section>`;
+}
+
+// W-019: voor welke termijnen deze ontvangst(regel) is gebruikt.
+function gebruiktVoor(app, leningId, ontvangstId, regel) {
+  const tekst = gebruiktVoorTekst(app.verwerking.resultaten.get(leningId), ontvangstId, regel);
+  return tekst ? `voor ${tekst}` : '';
 }
 
 function lijstHtml(app, query) {
@@ -263,7 +280,7 @@ function lijstHtml(app, query) {
   for (const r of app.verwerking.resultaten.values()) {
     for (const o of r.ontvangsten) {
       const huidig = status.get(o.ontvangst_id);
-      if (!huidig || o.wijze === 'te_beoordelen') status.set(o.ontvangst_id, o.wijze);
+      if (!huidig || o.wijze === 'te_beoordelen' || o.wijze === 'deels') status.set(o.ontvangst_id, o.wijze === 'deels' ? 'te_beoordelen' : o.wijze);
     }
   }
   const teBeoordelen = data.ontvangsten.filter((o) => status.get(o.id) === 'te_beoordelen').sort((a, b) => a.datum.localeCompare(b.datum));

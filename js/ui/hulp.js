@@ -51,7 +51,24 @@ export const TEKST = {
   status: { lopend: 'Lopend', afgelost: 'Afgelost', kwijtgescholden: 'Kwijtgescholden' },
   contractsoort: { onderhands: 'Onderhandse akte', notarieel: 'Notariële akte' },
   betaalwijze: { samen: 'Rente en aflossing samen', apart: 'Rente en aflossing apart' },
-  wijze: { automatisch: 'Automatisch verdeeld', handmatig: 'Handmatig verdeeld', te_beoordelen: 'Te beoordelen', voor_start: 'Telt niet mee' },
+  wijze: {
+    automatisch: 'Automatisch verdeeld',
+    handmatig: 'Handmatig verdeeld',
+    termijnen: 'Verdeeld over termijnen',
+    deels: 'Deels verwerkt, restant te beoordelen',
+    te_beoordelen: 'Te beoordelen',
+    teruggestort: 'Teruggestort, telt niet mee',
+    voor_start: 'Telt niet mee',
+  },
+  // W-019: keuze bij een te hoog bedrag.
+  keuze: {
+    '': 'Volle termijnen; restant beoordelen',
+    volgende: 'Restant naar de volgende termijn (rente eerst)',
+    extra: 'Restant als extra aflossing',
+    terug: 'Restant terugstorten',
+    alles_extra: 'Alles boven de eerste termijn als extra aflossing',
+    alles_terug: 'Hele bedrag terugstorten (telt niet mee)',
+  },
   ernst: { hoog: 'Actie nodig', middel: 'Let op', info: 'Ter info' },
 };
 
@@ -93,4 +110,24 @@ export function leesGetal(v, { duizendtallen = true } = {}) {
 export function veiligeUrl(url) {
   const t = String(url || '').trim();
   return /^https?:\/\/[^\s]+$/i.test(t) ? t : '';
+}
+
+
+// W-019: herleidbaarheid. Voor welke termijnen een ontvangst(regel) is
+// gebruikt, als tekst: "termijn 7 en 8, deel van termijn 9".
+export function gebruiktVoorTekst(resultaat, ontvangstId, regel) {
+  if (!resultaat) return '';
+  const hoort = (b) => b.ontvangst_id === ontvangstId && (b.regel === undefined || regel === undefined || b.regel === regel);
+  const vol = [];
+  const deel = [];
+  for (const t of resultaat.termijnen) {
+    const hier = t.betalingen.filter(hoort).reduce((s, b) => s + b.rente + b.aflossing, 0);
+    if (hier <= 0) continue;
+    (hier >= t.totaal ? vol : deel).push(t.nr);
+  }
+  const lijst = (nrs) => (nrs.length > 1 ? `${nrs.slice(0, -1).join(', ')} en ${nrs[nrs.length - 1]}` : `${nrs[0]}`);
+  const delen = [];
+  if (vol.length) delen.push(`termijn ${lijst(vol)}`);
+  if (deel.length) delen.push(`deel van termijn ${lijst(deel)}`);
+  return delen.join(', ');
 }

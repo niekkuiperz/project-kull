@@ -87,11 +87,13 @@ test('ontvangst gelijk aan termijn wordt automatisch verdeeld; afwijkend bedrag 
   assert.equal(o1.wijze, 'automatisch');
   assert.equal(o1.rente, 2500);
   assert.equal(o1.aflossing, 83333);
-  assert.equal(o2.wijze, 'te_beoordelen');
+  // W-019: 900 dekt termijn 2 helemaal; 41,67 blijft over ter beoordeling
+  assert.equal(o2.wijze, 'deels');
+  assert.equal(o2.restant, 4167);
   assert.equal(o2.verwacht, 85833);
-  assert.equal(r.saldo, 1000000 - 83333);
+  assert.equal(r.saldo, 1000000 - 2 * 83333);
   assert.equal(r.termijnen[0].status, 'voldaan');
-  assert.equal(r.termijnen[1].status, 'verlopen');
+  assert.equal(r.termijnen[1].status, 'voldaan');
 });
 
 test('handmatige verdeling met extra aflossing', () => {
@@ -293,7 +295,8 @@ test('W-005: te laag vast termijnbedrag zonder einddatum geeft een waarschuwing,
   const l = { ...basis, hoofdsom: 10000, rente: 6, aflossingsvorm: 'annuitair', termijnbedrag: 20, einddatum: null };
   const r = verwerkLening(l, [], '2026-06-01');
   assert.ok(r.signalen.some((s) => /niet hoger dan de rente/.test(s.tekst)));
-  assert.ok(r.termijnen.length < 12);
+  // geen eindeloos schema: hooguit tot ruim twee jaar na de peildatum
+  assert.ok(r.termijnen.length < 40, `${r.termijnen.length} termijnen`);
 });
 
 test('W-001: extra aflossing bij aflossingsvrij verlaagt de rente vanaf de volgende termijn', () => {
@@ -514,4 +517,108 @@ test('W-022: renteherziening rekent opnieuw over het saldo en de resterende term
   // saldo na 6 termijnen 6.000, 6 resterend: aflossing 1.000, rente 3% over 3.000 / 12 = 7,50
   assert.equal(na.length, 6);
   assert.ok(na.every((t) => t.aflossing === 100000 && t.rente === 750));
+});
+
+// ---------------------------------------------------------------------------
+// Versie 1.4.0: W-019 te veel betaald (fictieve bedragen)
+// ---------------------------------------------------------------------------
+// 6.000 tegen 20% over 120 maanden (praktijkmethode): elke termijn 50 rente + 50 aflossing.
+const honderd = { ...basis, hoofdsom: 6000, rente: 20, aflossingsvorm: 'annuitair', ingangsdatum: '2026-01-01', eerste_vervaldatum: '2026-01-31', einddatum: '2035-12-31' };
+const ontv = (bedrag, keuze, datum = '2026-01-31') => [{ ontvangst_id: 'o1', datum, bedrag, ...(keuze ? { keuze } : {}) }];
+
+test('W-019: 250 bij 100 verwacht: twee volle termijnen, 50 ter beoordeling', () => {
+  const r = verwerkLening(honderd, ontv(250), '2026-02-05');
+  const o = r.ontvangsten[0];
+  assert.equal(r.termijnen[0].totaal, 10000);
+  assert.equal(o.wijze, 'deels');
+  assert.equal(o.rente, 10000);
+  assert.equal(o.aflossing, 10000);
+  assert.equal(o.restant, 5000);
+  assert.equal(r.termijnen[0].status, 'voldaan');
+  assert.equal(r.termijnen[1].status, 'voldaan'); // vooruitbetaald
+  assert.equal(r.saldo, 600000 - 10000);
+  assert.ok(r.termijnen[2].ontvangen === 0);
+});
+
+test('W-019: restant naar de volgende termijn, rente eerst', () => {
+  const r = verwerkLening(honderd, ontv(250, 'volgende'), '2026-02-05');
+  const o = r.ontvangsten[0];
+  assert.equal(o.wijze, 'termijnen');
+  assert.equal(o.rente, 15000);
+  assert.equal(o.aflossing, 10000);
+  assert.equal(r.termijnen[2].ontvangen_rente, 5000);
+  assert.equal(r.termijnen[2].ontvangen_aflossing, 0);
+  assert.equal(r.termijnen[2].status, 'deels');
+  assert.deepEqual(o.termijnen_gebruikt, ['2026-01-31', '2026-02-28', '2026-03-31']);
+});
+
+test('W-019: restant als extra aflossing verlaagt het saldo', () => {
+  const r = verwerkLening(honderd, ontv(250, 'extra'), '2026-02-05');
+  const o = r.ontvangsten[0];
+  assert.equal(o.wijze, 'termijnen');
+  assert.equal(o.extra_aflossing, 5000);
+  assert.equal(r.saldo, 600000 - 15000);
+});
+
+test('W-019: restant terugstorten telt niet mee', () => {
+  const r = verwerkLening(honderd, ontv(250, 'terug'), '2026-02-05');
+  const o = r.ontvangsten[0];
+  assert.equal(o.wijze, 'termijnen');
+  assert.equal(o.teruggestort, 5000);
+  assert.equal(o.rente + o.aflossing, 20000);
+  assert.equal(r.saldo, 600000 - 10000);
+});
+
+test('W-019: alles boven de eerste termijn als extra aflossing', () => {
+  const r = verwerkLening(honderd, ontv(250, 'alles_extra'), '2026-02-05');
+  const o = r.ontvangsten[0];
+  assert.equal(o.extra_aflossing, 15000);
+  assert.equal(r.saldo, 600000 - 5000 - 15000);
+  assert.equal(r.termijnen[0].status, 'voldaan');
+});
+
+test('W-019: hele ontvangst terugstorten', () => {
+  const r = verwerkLening(honderd, ontv(250, 'alles_terug'), '2026-02-05');
+  assert.equal(r.ontvangsten[0].wijze, 'teruggestort');
+  assert.equal(r.saldo, 600000);
+  assert.equal(r.termijnen[0].ontvangen, 0);
+});
+
+test('W-019: te weinig betaald blijft te beoordelen', () => {
+  const r = verwerkLening(honderd, ontv(80), '2026-02-05');
+  assert.equal(r.ontvangsten[0].wijze, 'te_beoordelen');
+  assert.equal(r.saldo, 600000);
+});
+
+test('W-019: eerst de achterstand, dan de volgende termijnen', () => {
+  // 31-1 en 28-2 staan open, 31-3 is de volgende. 350 dekt alle drie plus 50.
+  const r = verwerkLening(honderd, ontv(350, null, '2026-03-20'), '2026-03-25');
+  assert.equal(r.ontvangsten[0].wijze, 'deels');
+  assert.deepEqual(r.ontvangsten[0].termijnen_gebruikt, ['2026-01-31', '2026-02-28', '2026-03-31']);
+  assert.equal(r.ontvangsten[0].restant, 5000);
+  assert.ok(r.termijnen.slice(0, 3).every((t) => t.status === 'voldaan'));
+});
+
+test('W-019: vooruitbetaling verder dan 45 dagen en meer dan 6 termijnen', () => {
+  const r = verwerkLening(honderd, ontv(1000), '2026-02-05');
+  assert.equal(r.ontvangsten[0].wijze, 'termijnen');
+  assert.equal(r.ontvangsten[0].termijnen_gebruikt.length, 10);
+  assert.equal(r.termijnen[9].status, 'voldaan');
+});
+
+test('W-019: herleidbaarheid: elke termijn weet welke ontvangst hem betaalde', () => {
+  const r = verwerkLening(honderd, ontv(250, 'volgende'), '2026-02-05');
+  for (const t of r.termijnen.slice(0, 3)) {
+    assert.equal(t.betalingen.length, 1);
+    assert.equal(t.betalingen[0].ontvangst_id, 'o1');
+    assert.equal(t.betalingen[0].datum, '2026-01-31');
+    assert.equal(t.betalingen[0].ontvangst_bedrag, 25000);
+  }
+});
+
+test('W-019: waarschuwing bij vooruitbetaalde rente na 30 juni van het volgende jaar', () => {
+  const kort = verwerkLening(honderd, ontv(500, null, '2026-12-20'), '2026-12-31');
+  assert.ok(!kort.signalen.some((s) => /30 juni 2027/.test(s.tekst)));
+  const lang = verwerkLening(honderd, ontv(2200, null, '2026-12-20'), '2026-12-31');
+  assert.ok(lang.signalen.some((s) => /30 juni 2027/.test(s.tekst)), JSON.stringify(lang.signalen));
 });

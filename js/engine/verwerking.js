@@ -16,7 +16,7 @@
 import {
   PERIODES_PER_JAAR, termijnDatum, eenPeriodeNa, plusDagen, plusMaanden,
 } from './datum.js';
-import { naarCenten } from './geld.js';
+import { naarCenten, formatEuro } from './geld.js';
 
 // Een ontvangst mag zoveel dagen vóór de vervaldatum binnenkomen en toch bij
 // die termijn horen (iemand betaalt de termijn van 1 maart al op 27 februari).
@@ -279,11 +279,93 @@ function verdeel(ontvangst, rente, aflossing, open, beperkt) {
     if (x > 0 || y > 0) {
       t.ontvangen_rente += x;
       t.ontvangen_aflossing += y;
-      t.betalingen.push({ ontvangst_id: ontvangst.ontvangst_id, datum: ontvangst.datum, rente: x, aflossing: y });
+      t.betalingen.push({ ontvangst_id: ontvangst.ontvangst_id, regel: ontvangst.regel, datum: ontvangst.datum, rente: x, aflossing: y, ontvangst_bedrag: ontvangst.centen });
       restA -= y;
     }
   }
   return { overschot_rente: restR, extra_aflossing: restA };
+}
+
+// Boekt een betaling op één termijn en legt vast welke ontvangst het was
+// (herleidbaarheid, W-019).
+function betaalTermijn(t, o, rente, aflossing) {
+  if (rente <= 0 && aflossing <= 0) return;
+  t.ontvangen_rente += rente;
+  t.ontvangen_aflossing += aflossing;
+  t.betalingen.push({ ontvangst_id: o.ontvangst_id, regel: o.regel, datum: o.datum, rente, aflossing, ontvangst_bedrag: o.centen });
+}
+
+// W-019: te veel betaald. Het bedrag gaat naar de open termijnen, oudste
+// eerst (eerst een achterstand, dan de volgende termijnen); elke termijn die
+// helemaal gedekt wordt, krijgt rente en aflossing volgens zijn schema. Wat
+// overblijft en een termijn niet helemaal dekt, wordt verwerkt volgens de
+// keuze bij de ontvangst, of blijft "te beoordelen". Het schema verandert
+// niet: dit is vooruitbetalen, geen extra aflossing (behalve als daarvoor
+// gekozen is). Geeft false terug als de regel niet van toepassing is (te
+// weinig betaald of niets open); dan blijft de ontvangst te beoordelen.
+function teVeelBetaald(o, termijnen, resultaat) {
+  const alleOpen = termijnen
+    .filter((t) => openTotaal(t) > 0)
+    .sort((x, y) => x.vervaldatum.localeCompare(y.vervaldatum));
+  if (!alleOpen.length || o.centen < openTotaal(alleOpen[0])) return false;
+
+  let rest = o.centen;
+  let rente = 0;
+  let aflossing = 0;
+  const gebruikt = [];
+  const vol = o.keuze === 'alles_extra' ? alleOpen.slice(0, 1) : alleOpen;
+  for (const t of vol) {
+    if (openTotaal(t) > rest) break;
+    const r = openRente(t);
+    const a = openAflossing(t);
+    betaalTermijn(t, o, r, a);
+    rente += r;
+    aflossing += a;
+    rest -= r + a;
+    gebruikt.push(t);
+  }
+  resultaat.wijze = 'termijnen';
+  resultaat.reden = '';
+  if (rest > 0) {
+    const keuze = o.keuze === 'alles_extra' ? 'extra' : o.keuze;
+    const volgende = alleOpen.find((t) => openTotaal(t) > 0);
+    if (keuze === 'volgende' && volgende) {
+      const r = Math.min(rest, openRente(volgende));
+      const a = Math.min(rest - r, openAflossing(volgende));
+      betaalTermijn(volgende, o, r, a);
+      rente += r;
+      aflossing += a;
+      rest -= r + a;
+      gebruikt.push(volgende);
+    }
+    if (rest > 0 && keuze === 'extra') {
+      aflossing += rest;
+      resultaat.extra_aflossing = rest;
+      rest = 0;
+    } else if (rest > 0 && keuze === 'terug') {
+      resultaat.teruggestort = rest;
+      rest = 0;
+    }
+    if (rest > 0) {
+      resultaat.wijze = 'deels';
+      resultaat.restant = rest;
+      resultaat.verwacht = volgende ? openTotaal(volgende) : null;
+      resultaat.reden = volgende
+        ? `Volle termijnen verwerkt; er blijft ${formatEuro(rest)} over dat de volgende termijn niet helemaal dekt.`
+        : `Volle termijnen verwerkt; er blijft ${formatEuro(rest)} over en er staat geen termijn meer open.`;
+    }
+  }
+  resultaat.rente = rente;
+  resultaat.aflossing = aflossing;
+  resultaat.termijnen_gebruikt = gebruikt.map((t) => t.vervaldatum);
+  // Fiscale waarschuwing (W-019): vooruitbetaalde rente voor een periode na
+  // 30 juni van het volgende jaar valt bij de eigen woning niet in één keer
+  // in het jaar van betaling (Belastingdienst, "Vooruitbetaalde rente").
+  const grens = `${Number(o.datum.slice(0, 4)) + 1}-06-30`;
+  if (gebruikt.some((t) => t.vervaldatum > grens && t.betalingen.some((b) => b.ontvangst_id === o.ontvangst_id && b.rente > 0))) {
+    resultaat.waarschuwing = `De ontvangst van ${o.datum.split('-').reverse().join('-')} betaalt rente vooruit voor termijnen na 30 juni ${Number(o.datum.slice(0, 4)) + 1}. Bij een lening voor de eigen woning is die rente niet in één keer aftrekbaar in het jaar van betaling; laat dit zo nodig nagaan.`;
+  }
+  return true;
 }
 
 function verwerkOntvangst(o, termijnen, betaalwijze) {
@@ -305,6 +387,14 @@ function verwerkOntvangst(o, termijnen, betaalwijze) {
     verwacht: open.length ? openTotaal(open[0]) : null,
   };
 
+  // W-019: de hele ontvangst terugstorten; telt niet mee.
+  if (o.keuze === 'alles_terug') {
+    resultaat.wijze = 'teruggestort';
+    resultaat.teruggestort = o.centen;
+    resultaat.reden = 'Teruggestort aan de lener; telt niet mee.';
+    return resultaat;
+  }
+
   let verdeling;
   if (o.rente_centen !== null || o.aflossing_centen !== null) {
     const r = o.rente_centen ?? 0;
@@ -316,8 +406,10 @@ function verwerkOntvangst(o, termijnen, betaalwijze) {
     verdeling = { rente: r, aflossing: a };
     resultaat.wijze = 'handmatig';
   } else {
-    verdeling = automatischeVerdeling(o.centen, open, betaalwijze);
+    verdeling = o.keuze ? null : automatischeVerdeling(o.centen, open, betaalwijze);
     if (!verdeling) {
+      const w019 = betaalwijze !== 'apart' && teVeelBetaald(o, termijnen, resultaat);
+      if (w019) return resultaat;
       resultaat.reden = open.length
         ? 'Het bedrag wijkt af van de verwachte termijn.'
         : 'Er staat geen termijn open waar deze ontvangst bij past.';
@@ -408,6 +500,7 @@ export function verwerkLening(lening, regels, peildatum) {
       centen: naarCenten(r.bedrag),
       rente_centen: naarCenten(r.rente),
       aflossing_centen: naarCenten(r.aflossing),
+      keuze: r.keuze || null,
     }))
     .sort((a, b) => a.datum.localeCompare(b.datum) || String(a.ontvangst_id).localeCompare(String(b.ontvangst_id)));
 
@@ -476,7 +569,10 @@ export function verwerkLening(lening, regels, peildatum) {
       || (o.datum === volgende && o.aflossing_centen > 0);
     const venster = resterend.filter(hoortBij);
     resterend = resterend.filter((o) => !hoortBij(o));
-    const grensVrij = eenPeriodeNa(peildatum > laatsteOntvangst ? peildatum : laatsteOntvangst, seg.params.frequentie);
+    // Zonder einddatum: termijnen tot ruim na de laatste ontvangst, zodat een
+    // vooruitbetaling over meer termijnen te verdelen is (W-019).
+    let grensVrij = eenPeriodeNa(peildatum > laatsteOntvangst ? peildatum : laatsteOntvangst, seg.params.frequentie);
+    for (let x = 0; x < 24; x += 1) grensVrij = eenPeriodeNa(grensVrij, seg.params.frequentie);
     let segTermijnen = genereerTermijnen(seg, k, P, volgende, grensVrij, signalen);
     termijnen.push(...segTermijnen);
 
@@ -485,7 +581,8 @@ export function verwerkLening(lening, regels, peildatum) {
       const res = verwerkOntvangst(o, termijnen, betaalwijze);
       verwerkt.push(res);
       extra += res.extra_aflossing;
-      if (res.wijze === 'automatisch' || res.wijze === 'handmatig') {
+      if (res.waarschuwing) signalen.push({ soort: 'gegevens', ernst: 'waarschuwing', tekst: res.waarschuwing });
+      if (['automatisch', 'handmatig', 'termijnen', 'deels'].includes(res.wijze)) {
         if (res.rente > 0) mutaties.push({ datum: o.datum, soort: 'rente', centen: res.rente, ontvangst_id: o.ontvangst_id });
         if (res.aflossing > 0) mutaties.push({ datum: o.datum, soort: 'aflossing', centen: res.aflossing, ontvangst_id: o.ontvangst_id });
       }

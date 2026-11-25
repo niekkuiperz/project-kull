@@ -1,8 +1,9 @@
-import { esc, euro, datum, TEKST, veiligeUrl } from './hulp.js';
+import { esc, euro, datum, TEKST, veiligeUrl, gebruiktVoorTekst } from './hulp.js';
 import { STATUS_TEKST } from '../engine/verwerking.js';
 import { beschrijfWijziging } from './leningen.js';
 import { signaalTabel } from './dashboard.js';
 import { formatDatum } from '../engine/datum.js';
+import { formatEuro } from '../engine/geld.js';
 
 export function toon(app, root, [id]) {
   const { data } = app;
@@ -72,15 +73,23 @@ export function toon(app, root, [id]) {
     <section>
       <h2>Betalingshistorie</h2>
       ${r.ontvangsten.length ? `<table class="tabel">
-        <thead><tr><th>Datum</th><th>Omschrijving</th><th class="getal">Bedrag</th><th class="getal">Rente</th><th class="getal">Aflossing</th><th>Verwerking</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Omschrijving</th><th class="getal">Bedrag</th><th class="getal">Rente</th><th class="getal">Aflossing</th><th>Gebruikt voor</th><th>Verwerking</th></tr></thead>
         <tbody>${[...r.ontvangsten].reverse().map((o) => {
           const bron = ontvangstInfo.get(o.ontvangst_id);
-          return `<tr class="${o.wijze === 'te_beoordelen' ? 'ernst-hoog' : ''}">
+          const leeg = ['te_beoordelen', 'voor_start', 'teruggestort'].includes(o.wijze);
+          const voor = [
+            gebruiktVoorTekst(r, o.ontvangst_id, o.regel),
+            o.extra_aflossing ? `extra aflossing ${formatEuro(o.extra_aflossing)}` : '',
+            o.restant ? `restant ${formatEuro(o.restant)} te beoordelen` : '',
+            o.teruggestort ? `teruggestort ${formatEuro(o.teruggestort)}` : '',
+          ].filter(Boolean).join('; ');
+          return `<tr class="${o.wijze === 'te_beoordelen' || o.wijze === 'deels' ? 'ernst-hoog' : ''}">
             <td>${datum(o.datum)}</td>
             <td>${esc(bron?.omschrijving || '')}${bron?.regels?.length > 1 ? ' <span class="label">gesplitst</span>' : ''}</td>
             <td class="getal">${euro(o.bedrag)}</td>
-            <td class="getal">${o.wijze === 'te_beoordelen' || o.wijze === 'voor_start' ? '' : euro(o.rente)}</td>
-            <td class="getal">${o.wijze === 'te_beoordelen' || o.wijze === 'voor_start' ? '' : euro(o.aflossing)}${o.extra_aflossing ? ` <span class="klein">(waarvan extra ${euro(o.extra_aflossing)})</span>` : ''}</td>
+            <td class="getal">${leeg ? '' : euro(o.rente)}</td>
+            <td class="getal">${leeg ? '' : euro(o.aflossing)}${o.extra_aflossing ? ` <span class="klein">(waarvan extra ${euro(o.extra_aflossing)})</span>` : ''}</td>
+            <td class="klein">${esc(voor)}</td>
             <td>${app.kanBewerken() ? `<a href="#/invoer/${esc(o.ontvangst_id)}" class="geen-print-link">${esc(TEKST.wijze[o.wijze])}</a>` : esc(TEKST.wijze[o.wijze])}</td>
           </tr>`;
         }).join('')}</tbody></table>` : '<p class="leeg">Nog geen ontvangsten.</p>'}
@@ -89,7 +98,7 @@ export function toon(app, root, [id]) {
     <section>
       <h2>Termijnschema</h2>
       ${r.termijnen.length ? `<table class="tabel compact">
-        <thead><tr><th class="getal">Nr</th><th>Vervaldatum</th><th class="getal">Rente</th><th class="getal">Aflossing</th><th class="getal">Termijn</th><th class="getal">Ontvangen</th><th class="getal">Open</th><th>Status</th></tr></thead>
+        <thead><tr><th class="getal">Nr</th><th>Vervaldatum</th><th class="getal">Rente</th><th class="getal">Aflossing</th><th class="getal">Termijn</th><th class="getal">Ontvangen</th><th class="getal">Open</th><th>Status</th><th>Betaald met</th></tr></thead>
         <tbody>${zichtbaar.map((t) => `<tr class="status-${t.status}">
           <td class="getal">${t.nr}</td>
           <td>${datum(t.vervaldatum)}</td>
@@ -99,6 +108,7 @@ export function toon(app, root, [id]) {
           <td class="getal">${t.ontvangen ? euro(t.ontvangen) : ''}</td>
           <td class="getal">${t.open > 0 && t.status !== 'gepland' && t.status !== 'vervallen' ? euro(t.open) : ''}</td>
           <td>${esc(STATUS_TEKST[t.status])}${t.laat_betaald ? ` <span class="klein">(betaald ${esc(formatDatum(t.betalingen[t.betalingen.length - 1].datum))})</span>` : ''}</td>
+          <td class="klein">${betaaldMet(app, t)}</td>
         </tr>`).join('')}</tbody></table>
         ${verborgen > 0 ? `<p class="geen-print"><button type="button" class="link" id="alles">Toon alle ${r.termijnen.length} termijnen</button></p>` : ''}
         ${alles && toekomst.length > 12 ? '<p class="geen-print"><button type="button" class="link" id="minder">Toon minder</button></p>' : ''}`
@@ -109,4 +119,16 @@ export function toon(app, root, [id]) {
   root.querySelector('#print').addEventListener('click', () => window.print());
   root.querySelector('#alles')?.addEventListener('click', () => { sessionStorage.setItem('kaart.alles', 'ja'); toon(app, root, [id]); });
   root.querySelector('#minder')?.addEventListener('click', () => { sessionStorage.removeItem('kaart.alles'); toon(app, root, [id]); });
+}
+
+// W-019: welke ontvangst(en) een termijn betaalden, zodat elke boeking terug
+// te vinden is op het bankafschrift: datum, deel en het totaal van de
+// ontvangst als die groter was.
+function betaaldMet(app, t) {
+  return t.betalingen.map((b) => {
+    const deel = b.rente + b.aflossing;
+    const totaal = b.ontvangst_bedrag && b.ontvangst_bedrag > deel ? ` van ${formatEuro(b.ontvangst_bedrag)}` : '';
+    const tekst = `${formatDatum(b.datum)}: ${formatEuro(deel)}${totaal}`;
+    return app.kanBewerken() ? `<a href="#/invoer/${esc(b.ontvangst_id)}" class="geen-print-link">${esc(tekst)}</a>` : esc(tekst);
+  }).join('<br>');
 }

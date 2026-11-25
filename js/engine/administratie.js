@@ -30,7 +30,7 @@ export function regelsPerLening(data) {
     (o.regels || []).forEach((r, i) => {
       if (!map.has(r.lening_id)) map.set(r.lening_id, []);
       map.get(r.lening_id).push({
-        ontvangst_id: o.id, regel: i, datum: o.datum, bedrag: r.bedrag, rente: r.rente ?? null, aflossing: r.aflossing ?? null,
+        ontvangst_id: o.id, regel: i, datum: o.datum, bedrag: r.bedrag, rente: r.rente ?? null, aflossing: r.aflossing ?? null, keuze: r.keuze ?? null,
       });
     });
   }
@@ -131,8 +131,22 @@ function maakSignalen(data, resultaten, peildatum) {
           tekst: `Ontvangst van ${formatEuro(o.bedrag)} op ${formatDatum(o.datum)}: ${o.reden} Verdeel hem handmatig over rente en aflossing.`,
           verschil: o.verwacht === null ? null : o.bedrag - o.verwacht,
         });
+      } else if (o.wijze === 'deels') {
+        // W-019: volle termijnen zijn verwerkt, het restant wacht op een keuze.
+        voeg({
+          ...basis, ernst: 'hoog', soort: 'beoordelen', ontvangst_id: o.ontvangst_id,
+          tekst: `Ontvangst van ${formatEuro(o.bedrag)} op ${formatDatum(o.datum)}: ${o.reden} Kies bij de ontvangst wat er met het restant van ${formatEuro(o.restant)} gebeurt.`,
+          verschil: o.restant,
+        });
       } else if (o.wijze === 'voor_start') {
         voeg({ ...basis, ernst: 'info', soort: 'voor_start', ontvangst_id: o.ontvangst_id, tekst: `${formatDatum(o.datum)}: ${o.reden}`, verschil: null });
+      }
+      if (o.teruggestort > 0) {
+        voeg({
+          ...basis, ernst: 'info', soort: 'teruggestort', ontvangst_id: o.ontvangst_id,
+          tekst: `${formatEuro(o.teruggestort)} van de ontvangst op ${formatDatum(o.datum)} is gemarkeerd als terug te storten en telt niet mee. Controleer dat het bedrag echt is teruggestort.`,
+          verschil: o.teruggestort,
+        });
       }
       if (o.extra_aflossing > 0) {
         voeg({
@@ -300,7 +314,7 @@ function cijfersJaar(r, jaar) {
     opmerking: beginstandInJaar ? `Beginstand per ${formatDatum(beginstandInJaar.datum)}` : '',
   };
   rij.klopt = rij.begin + rij.nieuw - rij.afgelost - rij.kwijtgescholden === rij.eind;
-  rij.onbeoordeeld = r.ontvangsten.filter((o) => o.wijze === 'te_beoordelen' && o.datum >= begin && o.datum <= eind).length;
+  rij.onbeoordeeld = r.ontvangsten.filter((o) => (o.wijze === 'te_beoordelen' || o.wijze === 'deels') && o.datum >= begin && o.datum <= eind).length;
   rij.actief = rij.begin !== 0 || rij.eind !== 0 || rij.nieuw !== 0 || rij.afgelost !== 0 || rij.rente !== 0 || rij.kwijtgescholden !== 0;
   return rij;
 }

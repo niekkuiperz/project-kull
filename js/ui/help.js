@@ -14,7 +14,8 @@ export const SCHERMEN = [
   ['invoer', 'Invoer (ontvangsten)', `
     <p>Hier voer je de betalingen in die op de bank zijn binnengekomen. Bovenaan kies je de maand; daaronder staan de ontvangsten van die maand, met wie ze invoerde en wie ze het laatst wijzigde.</p>
     <p><strong>Ontvangst invoeren:</strong> vul de datum van de bijschrijving en het bedrag in. Vul je het IBAN van de tegenrekening in, dan stelt de app de lener voor. Kies daarna de lening of leningen waar het geld bij hoort; betaalt iemand voor twee leningen tegelijk, verdeel het bedrag dan over beide.</p>
-    <p><strong>Verwerking:</strong> past het bedrag precies bij de open termijn, dan verdeelt de app het zelf over rente en aflossing. Wijkt het af, dan komt de ontvangst bij <em>te beoordelen</em>. Kies dan zelf hoeveel rente en hoeveel aflossing het is; de app doet een voorstel (rente eerst). Aflossing boven het schema telt als extra aflossing.</p>
+    <p><strong>Verwerking:</strong> past het bedrag precies bij de open termijn, dan verdeelt de app het zelf over rente en aflossing. Is het <strong>meer</strong>, dan gaat het naar de open termijnen, oudste eerst (eerst een achterstand, dan de volgende termijnen), en elke termijn die helemaal betaald is krijgt rente en aflossing volgens het schema. Voor wat overblijft kies je bij <em>Bij te veel betaald</em>: naar de volgende termijn (rente eerst), als extra aflossing, terugstorten, alles boven de eerste termijn als extra aflossing, of het hele bedrag terugstorten. Kies je niets, dan blijft het restant <em>te beoordelen</em>. Is het <strong>minder</strong> dan de oudste open termijn, dan komt de ontvangst bij <em>te beoordelen</em>; zet dan <em>zelf verdelen</em> aan en kies hoeveel rente en hoeveel aflossing het is (de app doet een voorstel, rente eerst).</p>
+    <p><strong>Rente vooruit:</strong> vooruitbetaalde rente telt in het jaaroverzicht in het jaar van ontvangst. Dekt een vooruitbetaling termijnen na 30 juni van het volgende jaar, dan geeft de app een waarschuwing: bij een lening voor de eigen woning is die rente niet in één keer aftrekbaar.</p>
     <p><strong>Wijzigen of verwijderen:</strong> klik in de lijst op <em>Wijzigen</em>. Een datum in de toekomst kan niet.</p>`],
   ['leningen', 'Leningen', `
     <p>De lijst met alle leningen, met lener, geldgever, aflossingsvorm, hoofdsom, rente en het huidige saldo. Filter bovenaan op status of geldgever. Klik op een lening voor de leningkaart.</p>
@@ -33,7 +34,7 @@ export const SCHERMEN = [
     <p>Klik op <em>Schema berekenen</em> en vergelijk het eerste termijnbedrag met het contract voordat je opslaat. Alle datums moeten tussen 2000 en 2200 liggen.</p>`],
   ['leningkaart', 'Leningkaart', `
     <p>Alles over één lening: openstaand saldo, achterstand en ontvangen rente dit jaar, de afspraken, eventuele meldingen, het termijnschema en de betalingshistorie.</p>
-    <p>In het <strong>termijnschema</strong> zie je per termijn wat er verwacht werd en wat er binnenkwam. In de <strong>betalingshistorie</strong> zie je elke ontvangst en hoe die verwerkt is. Met <em>Afspraken bewerken</em> pas je de lening aan, met <em>Ontvangst invoeren</em> voer je direct een betaling op deze lening in, en <em>Afdrukken of PDF</em> maakt een overzicht om te bewaren of te versturen.</p>`],
+    <p>In het <strong>termijnschema</strong> zie je per termijn wat er verwacht werd en wat er binnenkwam; in de kolom <em>Betaald met</em> staat met welke ontvangst(en), met datum en bedrag, zodat je het terugvindt op het bankafschrift. In de <strong>betalingshistorie</strong> zie je elke ontvangst, hoe die verwerkt is en in de kolom <em>Gebruikt voor</em> voor welke termijnen. Met <em>Afspraken bewerken</em> pas je de lening aan, met <em>Ontvangst invoeren</em> voer je direct een betaling op deze lening in, en <em>Afdrukken of PDF</em> maakt een overzicht om te bewaren of te versturen.</p>`],
   ['leners', 'Leners', `
     <p>De lijst met leners, met hun totale saldo en aantal leningen. Klik op een naam om de gegevens te bekijken of te wijzigen.</p>
     <p><strong>Bekende tegenrekeningen:</strong> de rekeningnummers waarvandaan iemand betaalt, één per regel. Daarmee herkent de app bij de invoer wie er betaalde. Een lener met leningen kun je niet verwijderen.</p>`],
@@ -44,7 +45,7 @@ export const SCHERMEN = [
   ['instellingen', 'Instellingen', `
     <p><strong>Geldgevers:</strong> de namen van de twee geldgevers zoals ze overal in de app staan.</p>
     <p><strong>Back-up:</strong> download een volledige kopie van de administratie, en zet die zo nodig terug. Zet een back-up ook op een tweede plek.</p>
-    <p><strong>Versiegeschiedenis:</strong> elke opslag is een versie. Je ziet wie wanneer opsloeg en kunt een oude versie terugzetten.</p>`],
+    <p><strong>Versiebeheer:</strong> elke opslag is een versie van de gegevens. Je ziet wie wanneer opsloeg; wie mag bewerken kan een oude versie terugzetten. Dit is iets anders dan de <a href="#/versies">Versiegeschiedenis</a> van de app zelf onder Hulp.</p>`],
   ['wensen', 'Wensen', `
     <p>Mis je iets of werkt iets onhandig, dien dan hier een wens in. Iedereen kan een wens indienen; alleen de beheerder ziet ze. De beheerder ziet een rood getal bij <em>Wensen</em> in het menu zolang er nieuwe wensen zijn, en zet een wens op gezien of afgehandeld.</p>`],
   ['account', 'Mijn account', `
@@ -58,7 +59,7 @@ export const SCHERMEN = [
 export function toon(app, root, params, route, query) {
   root.innerHTML = `
     <h1>Hulp</h1>
-    <p class="inhoudsopgave">Naar: <a href="#/help?over=werkinstructie">Werkinstructie</a> · ${SCHERMEN.map(([k, titel]) => `<a href="#/help?over=${k}">${esc(titel)}</a>`).join(' · ')} · <a href="#/help?over=begrippen">Begrippen</a></p>
+    <p class="inhoudsopgave">Naar: <a href="#/help?over=werkinstructie">Werkinstructie</a> · ${SCHERMEN.map(([k, titel]) => `<a href="#/help?over=${k}">${esc(titel)}</a>`).join(' · ')} · <a href="#/help?over=begrippen">Begrippen</a> · <a href="#/versies">Versiegeschiedenis</a></p>
     <section id="hulp-werkinstructie">
     <h2>Werkinstructie</h2>
     <section>
@@ -68,7 +69,7 @@ export function toon(app, root, params, route, query) {
         <li><strong>Open internetbankieren</strong> en bekijk de bijschrijvingen op alle rekeningen, privé en BV, over de afgelopen maand.</li>
         <li><strong>Voer elke leningbetaling in</strong> onder <a href="#/invoer">Invoer</a>: datum, bedrag, lener. Vul het IBAN van de tegenrekening in, dan herkent de app de lener. Pensioen, AOW en andere bijschrijvingen voer je niet in.</li>
         <li><strong>Betaalt iemand voor meer leningen in één keer</strong>, vink dan beide leningen aan en verdeel het bedrag.</li>
-        <li><strong>Los de meldingen op.</strong> Een waarschuwing over dubbele invoer: controleer of de betaling echt twee keer binnenkwam. Een bedrag dat afwijkt van de termijn komt bij "te beoordelen": verdeel het zelf over rente en aflossing, zo nodig na overleg met de lener.</li>
+        <li><strong>Los de meldingen op.</strong> Een waarschuwing over dubbele invoer: controleer of de betaling echt twee keer binnenkwam. Te veel betaald: kies bij de ontvangst wat er met het restant gebeurt. Te weinig betaald: de ontvangst komt bij "te beoordelen"; verdeel het zelf over rente en aflossing, zo nodig na overleg met de lener.</li>
         <li><strong>Bekijk "Aandacht nodig"</strong> op het <a href="#/">Overzicht</a> en onderneem actie bij achterstanden.</li>
         <li><strong>Download een back-up</strong> onder <a href="#/instellingen">Instellingen</a> en zet die op een tweede plek.</li>
       </ol>
@@ -101,7 +102,8 @@ export function toon(app, root, params, route, query) {
       <h2>Begrippen</h2>
       <dl>
         <dt>Achterstand</dt><dd>Een termijn die een maand na de vervaldatum niet volledig is ontvangen.</dd>
-        <dt>Te beoordelen</dt><dd>Een ontvangst waarvan het bedrag niet klopt met de verwachte termijn. Die telt pas mee als je hem zelf verdeelt.</dd>
+        <dt>Te beoordelen</dt><dd>Een ontvangst die lager is dan de verwachte termijn, of het restant van een te hoge ontvangst waarvoor nog geen keuze is gemaakt. Dat deel telt pas mee als je kiest of zelf verdeelt.</dd>
+        <dt>Vooruitbetaald</dt><dd>Een termijn die al betaald is voordat hij vervalt, uit een te hoge ontvangst. Het schema verandert niet.</dd>
         <dt>Extra aflossing</dt><dd>Meer aflossing dan het schema vraagt. Het saldo daalt en de app rekent de volgende termijnen opnieuw uit over het lagere saldo.</dd>
         <dt>Kwijtschelding of schenking</dt><dd>Een deel van de schuld vervalt zonder dat er geld binnenkomt. Leg je vast als wijziging; het telt in het jaaroverzicht als kwijtgescholden, niet als afgelost.</dd>
         <dt>Beginstand</dt><dd>Het saldo waarmee een lening die al liep in deze administratie start.</dd>

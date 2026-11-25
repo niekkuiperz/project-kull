@@ -16,6 +16,7 @@ import * as hulpScherm from './ui/help.js';
 import * as gebruikers from './ui/gebruikers.js';
 import * as account from './ui/account.js';
 import * as wensen from './ui/wensen.js';
+import * as versies from './ui/versies.js';
 import { toonInloggen } from './ui/inloggen.js';
 import { ServerOpslag, SessieVerlopen } from './opslag/server.js';
 
@@ -30,6 +31,7 @@ const ROUTES = [
   { patroon: /^#\/rapporten$/, scherm: rapporten, hulp: 'rapporten' },
   { patroon: /^#\/instellingen$/, scherm: instellingen, hulp: 'instellingen' },
   { patroon: /^#\/help$/, scherm: hulpScherm },
+  { patroon: /^#\/versies$/, scherm: versies },
   { patroon: /^#\/gebruikers$/, scherm: gebruikers, hulp: 'gebruikers' },
   { patroon: /^#\/account$/, scherm: account, hulp: 'account' },
   { patroon: /^#\/wensen$/, scherm: wensen, hulp: 'wensen' },
@@ -112,6 +114,7 @@ export const app = {
       const doel = a.getAttribute('href');
       a.classList.toggle('actief', doel === hash || (doel !== '#/' && hash.startsWith(doel)) || (doel === '#/' && hash === '#/overzicht'));
     });
+    document.getElementById('kop-hulp')?.classList.toggle('actief', hash === '#/help' || hash === '#/versies');
     if (!route) {
       main.innerHTML = '<h1>Pagina niet gevonden</h1>';
       return;
@@ -147,7 +150,9 @@ function toonKop() {
     : '<span class="label">Gedeelde database</span>';
   const rol = { beheerder: 'beheerder', eigenaar: 'bewerken', lezer: 'alleen lezen' }[app.gebruiker.rol] || app.gebruiker.rol;
   const server = app.opslag.modus === 'server';
-  info.innerHTML = `${modus} ${server ? `<a href="#/account">${esc(app.gebruiker.naam)}</a>` : `<span>${esc(app.gebruiker.naam)}</span>`} <span>(${esc(rol)})</span>${server ? ' <button type="button" class="link" id="uitloggen">Uitloggen</button>' : ''} <span class="hint" title="Versie van Kuparium">v${esc(VERSIE)}</span>`;
+  info.innerHTML = `${modus} ${server ? `<a href="#/account">${esc(app.gebruiker.naam)}</a>` : `<span>${esc(app.gebruiker.naam)}</span>`} <span>(${esc(rol)})</span>${server ? ' <button type="button" class="link" id="uitloggen">Uitloggen</button>' : ''} <a href="#/versies" class="hint" title="Versiegeschiedenis">v${esc(VERSIE)}</a>`;
+  // W-023: Hulp apart, rechts in de kop, voor iedereen.
+  info.insertAdjacentHTML('afterbegin', '<a href="#/help" class="kop-hulp" id="kop-hulp"><span class="kop-hulp-icoon" aria-hidden="true">?</span> Hulp</a>');
   document.getElementById('nav-gebruikers').hidden = !(server && app.gebruiker.rol === 'beheerder');
   wensen.werkMeldingBij(app);
   document.getElementById('uitloggen')?.addEventListener('click', async () => {

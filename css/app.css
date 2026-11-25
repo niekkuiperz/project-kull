@@ -196,3 +196,10 @@ body.alleen-lezen .knop.gevaar { display: none; }
 .inhoudsopgave { line-height: 1.8; }
 .hulp-scherm { margin-bottom: 1.2rem; }
 .link.gevaar { color: var(--rood); }
+
+/* W-023: Hulp rechts in de kop */
+.kop-hulp { display: inline-flex; align-items: center; gap: 0.35rem; color: #fff; text-decoration: none; padding: 0.25rem 0.6rem; border: 1px solid rgba(255,255,255,0.5); border-radius: var(--radius); font-weight: 600; }
+.kop-hulp:hover, .kop-hulp.actief { background: #fff; color: var(--accent-donker); }
+.kop-hulp-icoon { display: inline-flex; align-items: center; justify-content: center; width: 1.15rem; height: 1.15rem; border-radius: 50%; border: 1px solid currentColor; font-size: 0.8rem; line-height: 1; }
+.gebruiker a.hint { color: #cfdbe6; text-decoration: none; }
+.gebruiker a.hint:hover { text-decoration: underline; }
